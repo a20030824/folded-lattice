@@ -78,19 +78,29 @@ function walkCrease(
   return points;
 }
 
+interface CreaseNetwork {
+  creases: Crease[];
+  /**
+   * Centers of heavy crumpling. Fine wrinkles and dense sampling cluster
+   * here; the rest of the sheet keeps large, calm facets.
+   */
+  crushZones: { x: number; y: number }[];
+}
+
 function generateCreases(
   viewport: Viewport,
   settings: CreaseConfig,
   seed: number,
-): Crease[] {
+): CreaseNetwork {
   const random = createRandom(seed ^ 0x9e3779b9);
   const shortSide = Math.min(viewport.width, viewport.height);
-  const margin = shortSide * 0.05;
+  // The sheet overshoots the viewport so no paper edge is ever visible.
+  const overscan = shortSide * 0.1;
   const bounds = {
-    minX: margin,
-    maxX: viewport.width - margin,
-    minY: margin,
-    maxY: viewport.height - margin,
+    minX: -overscan,
+    maxX: viewport.width + overscan,
+    minY: -overscan,
+    maxY: viewport.height + overscan,
   };
   const diagonal = Math.hypot(viewport.width, viewport.height);
   const step = shortSide * 0.05;
@@ -126,37 +136,86 @@ function generateCreases(
     });
   }
 
-  const majorCount = creases.length;
-  for (let index = 0; index < settings.minorCount && majorCount > 0; index += 1) {
-    const parent = creases[Math.floor(random() * Math.min(creases.length, majorCount + index))]!;
-    const at = parent.points[
-      Math.floor(parent.points.length * (0.15 + random() * 0.7))
-    ]!;
-    const turn = (0.6 + random() * 0.7) * (random() < 0.5 ? 1 : -1);
+  // One or two crush zones where the sheet was gripped hardest.
+  const crushZones: { x: number; y: number }[] = [];
+  const zoneCount = 1 + (random() < 0.45 ? 1 : 0);
+  for (let index = 0; index < zoneCount; index += 1) {
+    crushZones.push({
+      x: viewport.width * (0.2 + random() * 0.6),
+      y: viewport.height * (0.2 + random() * 0.6),
+    });
+  }
+
+  const spawnMinor = (
+    originX: number,
+    originY: number,
+    parent: Crease,
+    lengthScale: number,
+    strengthBase: number,
+  ): void => {
+    const turn = (0.6 + random() * 0.9) * (random() < 0.5 ? 1 : -1);
     const cos = Math.cos(turn);
     const sin = Math.sin(turn);
     const directionX = parent.directionX * cos - parent.directionY * sin;
     const directionY = parent.directionX * sin + parent.directionY * cos;
-    const length = shortSide * (0.18 + random() * 0.35);
+    const length = shortSide * lengthScale * (0.7 + random() * 0.6);
 
     const points = walkCrease(
-      at.x, at.y, directionX, directionY,
+      originX, originY, directionX, directionY,
       length, step * 0.8, shortSide * 0.008, bounds, random,
     );
-    if (points.length < 2) continue;
+    if (points.length < 2) return;
 
     creases.push({
       id: creases.length,
       sign: random() < 0.7 ? (-parent.sign as 1 | -1) : parent.sign,
-      strength: 0.4 + random() * 0.3,
+      strength: strengthBase + random() * 0.25,
       widthRatio: settings.minorWidthRatio,
       points,
       directionX,
       directionY,
     });
+  };
+
+  const majorCount = creases.length;
+  if (majorCount > 0) {
+    // Most minor wrinkles radiate from the crush zones...
+    const clustered = Math.max(0, settings.minorCount - 2);
+    for (let index = 0; index < clustered; index += 1) {
+      const zone = crushZones[index % crushZones.length]!;
+      const parent = creases[Math.floor(random() * majorCount)]!;
+      let nearest = parent.points[0]!;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const point of parent.points) {
+        const dx = point.x - zone.x;
+        const dy = point.y - zone.y;
+        const distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared < nearestDistance) {
+          nearestDistance = distanceSquared;
+          nearest = point;
+        }
+      }
+      const jitter = shortSide * 0.09;
+      spawnMinor(
+        nearest.x + (random() - 0.5) * jitter,
+        nearest.y + (random() - 0.5) * jitter,
+        parent,
+        0.22,
+        0.4,
+      );
+    }
+
+    // ...and a couple of strays keep the calm regions from being pristine.
+    for (let index = 0; index < Math.min(2, settings.minorCount); index += 1) {
+      const parent = creases[Math.floor(random() * majorCount)]!;
+      const at = parent.points[
+        Math.floor(parent.points.length * (0.15 + random() * 0.7))
+      ]!;
+      spawnMinor(at.x, at.y, parent, 0.3, 0.3);
+    }
   }
 
-  return creases;
+  return { creases, crushZones };
 }
 
 /**
@@ -192,7 +251,7 @@ function restHeight(
   const wave =
     (valueNoise2D((x / shortSide) * 2.3 + seed * 0.001, (y / shortSide) * 2.3) - 0.5) *
     amplitude *
-    0.4;
+    0.18;
 
   return clamp(height, -amplitude * 1.2, amplitude * 1.2) + wave;
 }
@@ -203,13 +262,25 @@ export const creaseTopologyBuilder = {
     const seed = config.topology.randomSeed;
     const random = createRandom(seed + 7717);
     const shortSide = Math.min(viewport.width, viewport.height);
-    const margin = shortSide * config.topology.marginRatio;
-    const creases = generateCreases(viewport, settings, seed);
+    const overscan = shortSide * 0.1;
+    const { creases, crushZones } = generateCreases(viewport, settings, seed);
+
+    // Detail concentrates in the crush zones and relaxes to calm elsewhere.
+    const zoneScaleAt = (x: number, y: number): number => {
+      let nearestSquared = Number.POSITIVE_INFINITY;
+      for (const zone of crushZones) {
+        const dx = x - zone.x;
+        const dy = y - zone.y;
+        const distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared < nearestSquared) nearestSquared = distanceSquared;
+      }
+      return 0.7 + 1.1 * smoothstep(0, shortSide * 0.55, Math.sqrt(nearestSquared));
+    };
 
     // 1. Nodes along the crease lines, so mesh edges align with folds.
     const points: { x: number; y: number }[] = [];
     const creaseTags = new Map<number, CreaseNodeTag>();
-    const spacing = shortSide * settings.creaseSpacingRatio;
+    const baseSpacing = shortSide * settings.creaseSpacingRatio;
 
     for (const crease of creases) {
       let carried = 0;
@@ -220,7 +291,7 @@ export const creaseTopologyBuilder = {
           const other = points[index]!;
           const dx = other.x - x;
           const dy = other.y - y;
-          if (dx * dx + dy * dy < spacing * spacing * 0.3) {
+          if (dx * dx + dy * dy < baseSpacing * baseSpacing * 0.3) {
             sequence += 1;
             return;
           }
@@ -233,6 +304,7 @@ export const creaseTopologyBuilder = {
       emit(previous.x, previous.y);
       for (let index = 1; index < crease.points.length; index += 1) {
         const current = crease.points[index]!;
+        const spacing = baseSpacing * zoneScaleAt(previous.x, previous.y);
         let segment = Math.hypot(current.x - previous.x, current.y - previous.y);
         while (carried + segment >= spacing) {
           const t = (spacing - carried) / segment;
@@ -250,7 +322,7 @@ export const creaseTopologyBuilder = {
 
     const creaseNodeCount = points.length;
 
-    // 2. Open-facet nodes: sampling density decays away from the creases.
+    // 2. Open-facet nodes: density decays away from creases and crush zones.
     const near = shortSide * settings.nearDensityRatio;
     const far = shortSide * settings.farDensityRatio;
     const falloff = shortSide * settings.densityFalloffRatio;
@@ -261,8 +333,8 @@ export const creaseTopologyBuilder = {
       attempt < attempts && points.length < config.topology.nodeCount;
       attempt += 1
     ) {
-      const x = margin + random() * (viewport.width - margin * 2);
-      const y = margin + random() * (viewport.height - margin * 2);
+      const x = -overscan + random() * (viewport.width + overscan * 2);
+      const y = -overscan + random() * (viewport.height + overscan * 2);
 
       let creaseDistanceSquared = Number.POSITIVE_INFINITY;
       for (let index = 0; index < creaseNodeCount; index += 1) {
@@ -278,7 +350,8 @@ export const creaseTopologyBuilder = {
       if (creaseDistance < near * 0.9) continue;
 
       const minimumDistance =
-        near + (far - near) * smoothstep(0, falloff, creaseDistance);
+        (near + (far - near) * smoothstep(0, falloff, creaseDistance)) *
+        zoneScaleAt(x, y);
 
       let fits = true;
       for (const point of points) {

@@ -11,7 +11,7 @@ import { creaseTopologyBuilder } from "../core/topology/creaseTopology";
 
 const config: FoldedLatticeConfig = {
   topology: {
-    nodeCount: 300,
+    nodeCount: 380,
     minimumDistanceRatio: 0.05,
     marginRatio: 0.045,
     pinBoundary: true,
@@ -107,20 +107,20 @@ const config: FoldedLatticeConfig = {
   },
   crease: {
     majorCount: 3,
-    minorCount: 8,
+    minorCount: 9,
     amplitudeRatio: 0.045,
     majorWidthRatio: 0.11,
-    minorWidthRatio: 0.065,
-    creaseSpacingRatio: 0.032,
-    nearDensityRatio: 0.034,
-    farDensityRatio: 0.095,
-    densityFalloffRatio: 0.24,
+    minorWidthRatio: 0.06,
+    creaseSpacingRatio: 0.028,
+    nearDensityRatio: 0.026,
+    farDensityRatio: 0.16,
+    densityFalloffRatio: 0.2,
     grainOpacity: 0.35,
     valleyShadowStrength: 0.5,
     ridgeLightStrength: 0.55,
-    paperLit: "#48433a",
-    paperShadow: "#0f0d0a",
-    ridgeColor: "#eadfc7",
+    paperLit: "#5a5346",
+    paperShadow: "#161310",
+    ridgeColor: "#f0e6d2",
   },
 };
 

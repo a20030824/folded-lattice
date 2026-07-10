@@ -89,8 +89,8 @@ export function createPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       Math.hypot(width, height) * 0.62,
     );
     gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(0.7, "rgba(0,0,0,0.22)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.52)");
+    gradient.addColorStop(0.7, "rgba(0,0,0,0.14)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.36)");
     vignetteContext.clearRect(0, 0, width, height);
     vignetteContext.fillStyle = gradient;
     vignetteContext.fillRect(0, 0, width, height);
