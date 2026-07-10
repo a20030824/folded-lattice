@@ -1,8 +1,10 @@
 import Delaunator from "delaunator";
 
-import type { CreaseConfig, FoldedLatticeConfig } from "../config";
+import type { CreaseConfig, CreaseLifeConfig, FoldedLatticeConfig } from "../config";
 import type {
   CreaseEdgeState,
+  CreaseFieldState,
+  CreaseState,
   EdgeState,
   NodeState,
   TopologyState,
@@ -11,19 +13,16 @@ import type {
 import type { Viewport } from "../types";
 import { clamp, createRandom, hash01, smoothstep, valueNoise2D } from "../math";
 
-interface Crease {
-  id: number;
-  sign: 1 | -1;
-  strength: number;
-  widthRatio: number;
-  points: { x: number; y: number }[];
-  directionX: number;
-  directionY: number;
-}
-
 interface CreaseNodeTag {
   creaseId: number;
   sequence: number;
+}
+
+interface WalkBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 }
 
 const fallbackCrease: CreaseConfig = {
@@ -43,13 +42,14 @@ const fallbackCrease: CreaseConfig = {
   paperShadow: "#15130f",
   ridgeColor: "#eadfc7",
   shadowTint: "#242b3a",
+  curliness: 0.02,
 };
 
 /**
- * Walks a near-straight line through the sheet with a bounded random
- * perpendicular wander, the way a real fold is straight but never perfect.
+ * Walks a fold line: near-straight, but with a per-crease curvature and a
+ * bounded wander. Real creases are set by a hand, not a ruler.
  */
-function walkCrease(
+export function walkCreasePoints(
   startX: number,
   startY: number,
   directionX: number,
@@ -57,47 +57,164 @@ function walkCrease(
   maximumLength: number,
   step: number,
   wander: number,
-  bounds: { minX: number; maxX: number; minY: number; maxY: number },
+  curvature: number,
+  bounds: WalkBounds,
   random: () => number,
 ): { x: number; y: number }[] {
   const points: { x: number; y: number }[] = [];
+  let dx = directionX;
+  let dy = directionY;
+  let x = startX;
+  let y = startY;
   let offset = 0;
-  const normalX = -directionY;
-  const normalY = directionX;
 
   for (let travelled = 0; travelled <= maximumLength; travelled += step) {
-    offset += (random() - 0.5) * wander;
-    offset = clamp(offset, -wander * 4, wander * 4);
-    const x = startX + directionX * travelled + normalX * offset;
-    const y = startY + directionY * travelled + normalY * offset;
     if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY) {
       break;
     }
-    points.push({ x, y });
+    offset += (random() - 0.5) * wander;
+    offset = clamp(offset, -wander * 3, wander * 3);
+    points.push({ x: x - dy * offset, y: y + dx * offset });
+
+    const cos = Math.cos(curvature);
+    const sin = Math.sin(curvature);
+    const nextDx = dx * cos - dy * sin;
+    const nextDy = dx * sin + dy * cos;
+    dx = nextDx;
+    dy = nextDy;
+    x += dx * step;
+    y += dy * step;
   }
 
   return points;
 }
 
-interface CreaseNetwork {
-  creases: Crease[];
-  /**
-   * Centers of heavy crumpling. Fine wrinkles and dense sampling cluster
-   * here; the rest of the sheet keeps large, calm facets.
-   */
-  crushZones: { x: number; y: number }[];
+export function buildCreaseState(
+  id: number,
+  kind: "major" | "minor",
+  sign: 1 | -1,
+  strength: number,
+  widthRatio: number,
+  rawPoints: { x: number; y: number }[],
+  shortSide: number,
+  growth: number,
+  fadePerSecond: number,
+): CreaseState {
+  let totalLength = 0;
+  const lengths: number[] = [0];
+  for (let index = 1; index < rawPoints.length; index += 1) {
+    totalLength += Math.hypot(
+      rawPoints[index]!.x - rawPoints[index - 1]!.x,
+      rawPoints[index]!.y - rawPoints[index - 1]!.y,
+    );
+    lengths.push(totalLength);
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const point of rawPoints) {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  }
+  const influence = widthRatio * shortSide;
+
+  return {
+    id,
+    kind,
+    sign,
+    points: rawPoints.map((point, index) => ({
+      x: point.x,
+      y: point.y,
+      arc: totalLength > 0 ? lengths[index]! / totalLength : 0,
+    })),
+    widthRatio,
+    strength,
+    growth,
+    fadePerSecond,
+    age: 0,
+    minX: minX - influence,
+    minY: minY - influence,
+    maxX: maxX + influence,
+    maxY: maxY + influence,
+  };
 }
 
-function generateCreases(
+/**
+ * Signed height of the sheet at a point, from the current state of every
+ * crease (strength and tip growth included) plus a faint static undulation.
+ * Linear tents keep the surface piecewise planar - facets stay facets.
+ */
+export function evaluateCreaseField(
+  x: number,
+  y: number,
+  field: CreaseFieldState,
+): number {
+  let height = 0;
+
+  for (const crease of field.creases) {
+    if (crease.strength <= 0.001 || crease.growth <= 0.001) continue;
+    if (x < crease.minX || x > crease.maxX || y < crease.minY || y > crease.maxY) {
+      continue;
+    }
+
+    let nearestSquared = Number.POSITIVE_INFINITY;
+    let nearestTaper = 0;
+    for (const point of crease.points) {
+      if (point.arc > crease.growth) break;
+      const dx = x - point.x;
+      const dy = y - point.y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared < nearestSquared) {
+        nearestSquared = distanceSquared;
+        // The advancing tip eases in instead of popping.
+        nearestTaper = clamp((crease.growth - point.arc) / 0.12);
+      }
+    }
+    if (!Number.isFinite(nearestSquared)) continue;
+
+    const width = field.shortSide * crease.widthRatio;
+    const tent = 1 - Math.sqrt(nearestSquared) / width;
+    if (tent <= 0) continue;
+    height += crease.sign * crease.strength * field.amplitude * tent * nearestTaper;
+  }
+
+  const wave =
+    (valueNoise2D(
+      (x / field.shortSide) * 2.3 + field.waveSeed * 0.001,
+      (y / field.shortSide) * 2.3,
+    ) -
+      0.5) *
+    field.amplitude *
+    0.18;
+
+  return clamp(height, -field.amplitude * 1.2, field.amplitude * 1.2) + wave;
+}
+
+function localDirection(
+  points: { x: number; y: number }[],
+  index: number,
+): { x: number; y: number } {
+  const before = points[Math.max(0, index - 1)]!;
+  const after = points[Math.min(points.length - 1, index + 1)]!;
+  const length = Math.max(1e-6, Math.hypot(after.x - before.x, after.y - before.y));
+  return { x: (after.x - before.x) / length, y: (after.y - before.y) / length };
+}
+
+function generateCreaseField(
   viewport: Viewport,
   settings: CreaseConfig,
+  life: CreaseLifeConfig | undefined,
   seed: number,
-): CreaseNetwork {
+): CreaseFieldState {
   const random = createRandom(seed ^ 0x9e3779b9);
   const shortSide = Math.min(viewport.width, viewport.height);
   // The sheet overshoots the viewport so no paper edge is ever visible.
   const overscan = shortSide * 0.16;
-  const bounds = {
+  const bounds: WalkBounds = {
     minX: -overscan,
     maxX: viewport.width + overscan,
     minY: -overscan,
@@ -105,7 +222,10 @@ function generateCreases(
   };
   const diagonal = Math.hypot(viewport.width, viewport.height);
   const step = shortSide * 0.05;
-  const creases: Crease[] = [];
+  const creases: CreaseState[] = [];
+
+  const minorFade = (strength: number): number =>
+    life?.enabled ? strength / (life.fadeSeconds * (0.75 + random() * 0.6)) : 0;
 
   for (let index = 0; index < settings.majorCount; index += 1) {
     const angle = random() * Math.PI;
@@ -113,28 +233,34 @@ function generateCreases(
     const directionY = Math.sin(angle);
     const anchorX = viewport.width * (0.25 + random() * 0.5);
     const anchorY = viewport.height * (0.25 + random() * 0.5);
+    const curvature = (random() - 0.5) * 2 * settings.curliness;
 
-    // Walk both ways from the anchor so the fold crosses the whole sheet.
-    const forward = walkCrease(
+    // Walk both ways from the anchor so the fold crosses the whole sheet;
+    // travelling backward along the same arc flips the curvature sign.
+    const forward = walkCreasePoints(
       anchorX, anchorY, directionX, directionY,
-      diagonal, step, shortSide * 0.006, bounds, random,
+      diagonal, step, shortSide * 0.006, curvature, bounds, random,
     );
-    const backward = walkCrease(
+    const backward = walkCreasePoints(
       anchorX, anchorY, -directionX, -directionY,
-      diagonal, step, shortSide * 0.006, bounds, random,
+      diagonal, step, shortSide * 0.006, -curvature, bounds, random,
     );
     const points = [...backward.slice(1).reverse(), ...forward];
     if (points.length < 3) continue;
 
-    creases.push({
-      id: creases.length,
-      sign: random() < 0.5 ? 1 : -1,
-      strength: 0.8 + random() * 0.2,
-      widthRatio: settings.majorWidthRatio,
-      points,
-      directionX,
-      directionY,
-    });
+    creases.push(
+      buildCreaseState(
+        creases.length,
+        "major",
+        random() < 0.5 ? 1 : -1,
+        0.8 + random() * 0.2,
+        settings.majorWidthRatio,
+        points,
+        shortSide,
+        1,
+        0,
+      ),
+    );
   }
 
   // One or two crush zones where the sheet was gripped hardest.
@@ -150,32 +276,39 @@ function generateCreases(
   const spawnMinor = (
     originX: number,
     originY: number,
-    parent: Crease,
+    parentDirection: { x: number; y: number },
     lengthScale: number,
     strengthBase: number,
   ): void => {
     const turn = (0.6 + random() * 0.9) * (random() < 0.5 ? 1 : -1);
     const cos = Math.cos(turn);
     const sin = Math.sin(turn);
-    const directionX = parent.directionX * cos - parent.directionY * sin;
-    const directionY = parent.directionX * sin + parent.directionY * cos;
+    const directionX = parentDirection.x * cos - parentDirection.y * sin;
+    const directionY = parentDirection.x * sin + parentDirection.y * cos;
     const length = shortSide * lengthScale * (0.7 + random() * 0.6);
+    const curvature = (random() - 0.5) * 3 * settings.curliness;
 
-    const points = walkCrease(
+    const points = walkCreasePoints(
       originX, originY, directionX, directionY,
-      length, step * 0.8, shortSide * 0.008, bounds, random,
+      length, step * 0.8, shortSide * 0.008, curvature, bounds, random,
     );
     if (points.length < 2) return;
 
-    creases.push({
-      id: creases.length,
-      sign: random() < 0.7 ? (-parent.sign as 1 | -1) : parent.sign,
-      strength: strengthBase + random() * 0.25,
-      widthRatio: settings.minorWidthRatio,
+    const strength = strengthBase + random() * 0.25;
+    const crease = buildCreaseState(
+      creases.length,
+      "minor",
+      random() < 0.65 ? -1 : 1,
+      strength,
+      settings.minorWidthRatio,
       points,
-      directionX,
-      directionY,
-    });
+      shortSide,
+      1,
+      minorFade(strength),
+    );
+    // Stagger ages so the initial folds do not all heal in one wave.
+    crease.age = random() * (life?.fadeSeconds ?? 0) * 0.5;
+    creases.push(crease);
   };
 
   const majorCount = creases.length;
@@ -185,22 +318,23 @@ function generateCreases(
     for (let index = 0; index < clustered; index += 1) {
       const zone = crushZones[index % crushZones.length]!;
       const parent = creases[Math.floor(random() * majorCount)]!;
-      let nearest = parent.points[0]!;
+      let nearestIndex = 0;
       let nearestDistance = Number.POSITIVE_INFINITY;
-      for (const point of parent.points) {
-        const dx = point.x - zone.x;
-        const dy = point.y - zone.y;
+      for (let p = 0; p < parent.points.length; p += 1) {
+        const dx = parent.points[p]!.x - zone.x;
+        const dy = parent.points[p]!.y - zone.y;
         const distanceSquared = dx * dx + dy * dy;
         if (distanceSquared < nearestDistance) {
           nearestDistance = distanceSquared;
-          nearest = point;
+          nearestIndex = p;
         }
       }
       const jitter = shortSide * 0.09;
+      const origin = parent.points[nearestIndex]!;
       spawnMinor(
-        nearest.x + (random() - 0.5) * jitter,
-        nearest.y + (random() - 0.5) * jitter,
-        parent,
+        origin.x + (random() - 0.5) * jitter,
+        origin.y + (random() - 0.5) * jitter,
+        localDirection(parent.points, nearestIndex),
         0.22,
         0.4,
       );
@@ -209,52 +343,25 @@ function generateCreases(
     // ...and a couple of strays keep the calm regions from being pristine.
     for (let index = 0; index < Math.min(2, settings.minorCount); index += 1) {
       const parent = creases[Math.floor(random() * majorCount)]!;
-      const at = parent.points[
-        Math.floor(parent.points.length * (0.15 + random() * 0.7))
-      ]!;
-      spawnMinor(at.x, at.y, parent, 0.3, 0.3);
+      const at = Math.floor(parent.points.length * (0.15 + random() * 0.7));
+      spawnMinor(
+        parent.points[at]!.x,
+        parent.points[at]!.y,
+        localDirection(parent.points, at),
+        0.3,
+        0.3,
+      );
     }
   }
 
-  return { creases, crushZones };
-}
-
-/**
- * Signed rest height of the sheet: a sum of tent functions, one per crease,
- * plus a faint large-scale undulation so open facets are never dead flat.
- * Linear tents keep the surface piecewise planar - facets stay facets.
- */
-function restHeight(
-  x: number,
-  y: number,
-  creases: Crease[],
-  shortSide: number,
-  settings: CreaseConfig,
-  seed: number,
-): number {
-  const amplitude = shortSide * settings.amplitudeRatio;
-  let height = 0;
-
-  for (const crease of creases) {
-    let nearest = Number.POSITIVE_INFINITY;
-    for (const point of crease.points) {
-      const dx = x - point.x;
-      const dy = y - point.y;
-      const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared < nearest) nearest = distanceSquared;
-    }
-    const width = shortSide * crease.widthRatio;
-    const tent = 1 - Math.sqrt(nearest) / width;
-    if (tent <= 0) continue;
-    height += crease.sign * crease.strength * amplitude * tent;
-  }
-
-  const wave =
-    (valueNoise2D((x / shortSide) * 2.3 + seed * 0.001, (y / shortSide) * 2.3) - 0.5) *
-    amplitude *
-    0.18;
-
-  return clamp(height, -amplitude * 1.2, amplitude * 1.2) + wave;
+  return {
+    creases,
+    crushZones,
+    shortSide,
+    amplitude: shortSide * settings.amplitudeRatio,
+    waveSeed: seed,
+    nextCreaseId: creases.length,
+  };
 }
 
 export const creaseTopologyBuilder = {
@@ -264,7 +371,8 @@ export const creaseTopologyBuilder = {
     const random = createRandom(seed + 7717);
     const shortSide = Math.min(viewport.width, viewport.height);
     const overscan = shortSide * 0.16;
-    const { creases, crushZones } = generateCreases(viewport, settings, seed);
+    const field = generateCreaseField(viewport, settings, settings.life, seed);
+    const { creases, crushZones } = field;
 
     // Detail concentrates in the crush zones and relaxes to calm elsewhere.
     const zoneScaleAt = (x: number, y: number): number => {
@@ -286,7 +394,7 @@ export const creaseTopologyBuilder = {
     for (const crease of creases) {
       let carried = 0;
       let sequence = 0;
-      let previous = crease.points[0]!;
+      let previous = { x: crease.points[0]!.x, y: crease.points[0]!.y };
       const emit = (x: number, y: number): void => {
         for (let index = 0; index < points.length; index += 1) {
           const other = points[index]!;
@@ -317,7 +425,7 @@ export const creaseTopologyBuilder = {
           carried = 0;
         }
         carried += segment;
-        previous = current;
+        previous = { x: current.x, y: current.y };
       }
     }
 
@@ -388,7 +496,7 @@ export const creaseTopologyBuilder = {
     const delaunay = Delaunator.from(points, (point) => point.x, (point) => point.y);
     const hullNodes = new Set<number>(delaunay.hull);
     const nodes: NodeState[] = points.map((point, id) => {
-      const z = restHeight(point.x, point.y, creases, shortSide, settings, seed);
+      const z = evaluateCreaseField(point.x, point.y, field);
       return {
         id,
         position: { x: point.x, y: point.y, z },
@@ -529,6 +637,6 @@ export const creaseTopologyBuilder = {
       creaseEdge.triangleB = owners[1] ?? -1;
     }
 
-    return { nodes, edges, triangles, creaseEdges };
+    return { nodes, edges, triangles, creaseEdges, creaseField: field };
   },
 };

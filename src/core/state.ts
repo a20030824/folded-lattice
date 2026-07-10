@@ -76,11 +76,63 @@ export interface CreaseEdgeState {
   triangleB: number;
 }
 
+export interface CreasePointState {
+  x: number;
+  y: number;
+  /**
+   * Cumulative position along the crease, 0 at the origin, 1 at the tip.
+   * Growth animation reveals points in arc order.
+   */
+  arc: number;
+}
+
+/**
+ * A fold line as a living object: it can grow tip-forward, hold, and fade.
+ */
+export interface CreaseState {
+  id: number;
+  kind: "major" | "minor";
+  sign: 1 | -1;
+  points: CreasePointState[];
+  widthRatio: number;
+  strength: number;
+  /**
+   * 0..1 fraction of the polyline that currently exists.
+   */
+  growth: number;
+  /**
+   * Strength lost per second; 0 for permanent folds.
+   */
+  fadePerSecond: number;
+  age: number;
+  /**
+   * Cached bounding box (inflated by influence width) for fast rejection.
+   */
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/**
+ * The dynamic fold field behind a crumpled-sheet topology. Systems mutate
+ * crease strengths/growth and re-derive the rest pose from it.
+ */
+export interface CreaseFieldState {
+  creases: CreaseState[];
+  crushZones: { x: number; y: number }[];
+  shortSide: number;
+  amplitude: number;
+  waveSeed: number;
+  nextCreaseId: number;
+}
+
 export interface TopologyState {
   nodes: NodeState[];
   edges: EdgeState[];
   triangles: TriangleState[];
   creaseEdges: CreaseEdgeState[];
+  creaseField?: CreaseFieldState;
 }
 
 export interface SimulationState {

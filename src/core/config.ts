@@ -180,6 +180,54 @@ export interface CreaseConfig {
    * have a color of their own.
    */
   shadowTint: string;
+
+  /**
+   * Curvature of fold lines in radians per walk step; real creases are
+   * near-straight but never ruler-straight.
+   */
+  curliness: number;
+
+  life?: CreaseLifeConfig;
+}
+
+/**
+ * Slow life cycle of the fold network: new creases grow tip-forward,
+ * mature ones fade or get pressed flat, and a long press by the pointer
+ * sets a fresh fold. All timescales are in seconds.
+ */
+export interface CreaseLifeConfig {
+  enabled: boolean;
+  /**
+   * Average pause between spontaneous fold events.
+   */
+  spawnIntervalSeconds: number;
+  growSeconds: number;
+  /**
+   * Typical lifetime of a minor fold before it has fully healed.
+   */
+  fadeSeconds: number;
+  /**
+   * Hold duration after which a pressed pointer sets a new crease.
+   */
+  pressSeconds: number;
+  maximumMinorCount: number;
+}
+
+/**
+ * A moving height plane reveals the otherwise invisible surface. Older
+ * slices remain briefly as cool contour echoes: time is drawn as distance.
+ */
+export interface ContourConfig {
+  cycleSeconds: number;
+  echoCount: number;
+  echoDelaySeconds: number;
+  levelRangeRatio: number;
+  presentWidth: number;
+  echoWidth: number;
+  presentColor: string;
+  recentColor: string;
+  distantColor: string;
+  backgroundLift: string;
 }
 
 export interface FoldedLatticeConfig {
@@ -191,4 +239,5 @@ export interface FoldedLatticeConfig {
   render: RenderConfig;
   performance: PerformanceConfig;
   crease?: CreaseConfig;
+  contour?: ContourConfig;
 }
