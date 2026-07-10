@@ -138,6 +138,45 @@ export interface PerformanceConfig {
   maximumDevicePixelRatio: number;
 }
 
+/**
+ * Crumpled-sheet presets: fold-line network, density-varying sampling,
+ * and the paper renderer's material parameters. Ratios are of the
+ * viewport's short side.
+ */
+export interface CreaseConfig {
+  majorCount: number;
+  minorCount: number;
+
+  /**
+   * Peak rest-pose height of a full-strength crease.
+   */
+  amplitudeRatio: number;
+  majorWidthRatio: number;
+  minorWidthRatio: number;
+
+  /**
+   * Node spacing along crease lines.
+   */
+  creaseSpacingRatio: number;
+  /**
+   * Sampling min-distance next to creases vs. in open facets.
+   */
+  nearDensityRatio: number;
+  farDensityRatio: number;
+  /**
+   * Distance over which sampling density decays to sparse.
+   */
+  densityFalloffRatio: number;
+
+  grainOpacity: number;
+  valleyShadowStrength: number;
+  ridgeLightStrength: number;
+
+  paperLit: string;
+  paperShadow: string;
+  ridgeColor: string;
+}
+
 export interface FoldedLatticeConfig {
   topology: TopologyConfig;
   physics: PhysicsConfig;
@@ -146,4 +185,5 @@ export interface FoldedLatticeConfig {
   reveal: RevealConfig;
   render: RenderConfig;
   performance: PerformanceConfig;
+  crease?: CreaseConfig;
 }

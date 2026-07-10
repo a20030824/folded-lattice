@@ -122,7 +122,9 @@ function distance(a: NodeState, b: NodeState): number {
 export const delaunayTopologyBuilder = {
   build(viewport: Viewport, config: FoldedLatticeConfig): TopologyState {
     const points = generatePoints(viewport, config);
-    if (points.length < 3) return { nodes: [], edges: [], triangles: [] };
+    if (points.length < 3) {
+      return { nodes: [], edges: [], triangles: [], creaseEdges: [] };
+    }
 
     const delaunay = Delaunator.from(points, (point) => point.x, (point) => point.y);
     const hullNodes = new Set<number>(delaunay.hull);
@@ -236,6 +238,6 @@ export const delaunayTopologyBuilder = {
       triangles[second]!.neighborIndices.push(first);
     }
 
-    return { nodes, edges, triangles };
+    return { nodes, edges, triangles, creaseEdges: [] };
   },
 };

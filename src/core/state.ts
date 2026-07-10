@@ -64,10 +64,23 @@ export interface FieldState {
   active: boolean;
 }
 
+/**
+ * An edge that lies on a crease of the sheet. Only these edges are ever
+ * drawn as lines by surface-first renderers; sign +1 is a ridge, -1 a valley.
+ */
+export interface CreaseEdgeState {
+  edgeIndex: number;
+  sign: 1 | -1;
+  strength: number;
+  triangleA: number;
+  triangleB: number;
+}
+
 export interface TopologyState {
   nodes: NodeState[];
   edges: EdgeState[];
   triangles: TriangleState[];
+  creaseEdges: CreaseEdgeState[];
 }
 
 export interface SimulationState {
@@ -80,7 +93,7 @@ export interface SimulationState {
 
 export function createEmptySimulationState(viewport: Viewport): SimulationState {
   return {
-    topology: { nodes: [], edges: [], triangles: [] },
+    topology: { nodes: [], edges: [], triangles: [], creaseEdges: [] },
     fields: [],
     pointer: {
       position: { x: 0, y: 0 },
