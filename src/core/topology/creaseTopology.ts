@@ -95,7 +95,7 @@ function generateCreases(
   const random = createRandom(seed ^ 0x9e3779b9);
   const shortSide = Math.min(viewport.width, viewport.height);
   // The sheet overshoots the viewport so no paper edge is ever visible.
-  const overscan = shortSide * 0.1;
+  const overscan = shortSide * 0.16;
   const bounds = {
     minX: -overscan,
     maxX: viewport.width + overscan,
@@ -262,7 +262,7 @@ export const creaseTopologyBuilder = {
     const seed = config.topology.randomSeed;
     const random = createRandom(seed + 7717);
     const shortSide = Math.min(viewport.width, viewport.height);
-    const overscan = shortSide * 0.1;
+    const overscan = shortSide * 0.16;
     const { creases, crushZones } = generateCreases(viewport, settings, seed);
 
     // Detail concentrates in the crush zones and relaxes to calm elsewhere.

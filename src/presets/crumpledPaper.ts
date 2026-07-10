@@ -15,7 +15,7 @@ const config: FoldedLatticeConfig = {
     minimumDistanceRatio: 0.05,
     marginRatio: 0.045,
     pinBoundary: true,
-    randomSeed: 90417,
+    randomSeed: 60250,
   },
   physics: {
     // Stiff in plane like paper, but compliant in z so touch and breath read.
