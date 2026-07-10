@@ -175,6 +175,11 @@ export interface CreaseConfig {
   paperLit: string;
   paperShadow: string;
   ridgeColor: string;
+  /**
+   * Occluded areas sink toward this tint, never toward black - shadows
+   * have a color of their own.
+   */
+  shadowTint: string;
 }
 
 export interface FoldedLatticeConfig {

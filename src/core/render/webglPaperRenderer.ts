@@ -40,6 +40,7 @@ varying vec2 vUv;
 uniform vec3 uLight;
 uniform vec3 uLitColor;
 uniform vec3 uShadowColor;
+uniform vec3 uShadowTint;
 uniform vec2 uFalloffDirection;
 uniform vec2 uResolution;
 uniform float uAspect;
@@ -65,20 +66,25 @@ void main() {
   vec3 n = normalize(vNormal);
 
   float lambert = dot(n, uLight);
-  float shade = clamp((lambert - 0.35) * 1.7, 0.0, 1.0);
+  float shade = clamp((lambert - 0.3) * 1.65, 0.0, 1.0);
 
   // A lamp never lights a sheet evenly: broad falloff toward the light.
   float falloff = clamp(
     0.5 + dot((vUv - 0.5) * vec2(uAspect, 1.0), uFalloffDirection) * 0.9,
     0.0, 1.0
   );
-  shade *= 0.84 + falloff * 0.3;
+  shade *= 0.82 + falloff * 0.32;
 
+  // Warm key light against cool shadow: the contrast is temperature,
+  // not just value.
   vec3 color = mix(uShadowColor, uLitColor, shade);
 
-  // Satin sheen: paper is matte but not dead.
+  // Temperature drifts across the sheet - warm near the light, cool far.
+  color *= mix(vec3(0.94, 0.985, 1.07), vec3(1.05, 1.005, 0.94), falloff);
+
+  // Satin sheen, slightly golden.
   vec3 halfVector = normalize(uLight + vec3(0.0, 0.0, 1.0));
-  color += pow(max(dot(n, halfVector), 0.0), 24.0) * uSheen;
+  color += pow(max(dot(n, halfVector), 0.0), 24.0) * uSheen * vec3(1.0, 0.95, 0.85);
 
   // Anisotropic fiber grain, two octaves, static in screen space.
   vec2 pixel = vUv * uResolution;
@@ -87,12 +93,12 @@ void main() {
     noise(pixel * vec2(1.7, 2.3)) * 0.4;
   color *= 1.0 + (grain - 0.5) * uGrain;
 
-  // Contact shadow from local concavity (valleys, dents under the pointer).
-  color *= vOcclusion;
+  // Occlusion sinks toward a deep cool tint, never toward black.
+  color = mix(uShadowTint, color, vOcclusion);
 
-  // Vignette.
+  // Vignette settles into the same shadow air instead of black.
   float centerDistance = distance(vUv * vec2(uAspect, 1.0), vec2(0.5 * uAspect, 0.5));
-  color *= 1.0 - smoothstep(0.38, 1.05, centerDistance) * 0.34;
+  color = mix(color, uShadowTint * 0.85, smoothstep(0.44, 1.1, centerDistance) * 0.3);
 
   gl_FragColor = vec4(color, 1.0);
 }
@@ -270,6 +276,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     light: gl.getUniformLocation(program, "uLight"),
     litColor: gl.getUniformLocation(program, "uLitColor"),
     shadowColor: gl.getUniformLocation(program, "uShadowColor"),
+    shadowTint: gl.getUniformLocation(program, "uShadowTint"),
     falloffDirection: gl.getUniformLocation(program, "uFalloffDirection"),
     aspect: gl.getUniformLocation(program, "uAspect"),
     grain: gl.getUniformLocation(program, "uGrain"),
@@ -422,6 +429,13 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       );
       gl.uniform3f(uniforms.litColor, lit.r / 255, lit.g / 255, lit.b / 255);
       gl.uniform3f(uniforms.shadowColor, shadow.r / 255, shadow.g / 255, shadow.b / 255);
+      const shadowTint = parseColor(settings.shadowTint);
+      gl.uniform3f(
+        uniforms.shadowTint,
+        shadowTint.r / 255,
+        shadowTint.g / 255,
+        shadowTint.b / 255,
+      );
       gl.uniform2f(
         uniforms.falloffDirection,
         light.x / falloffLength,

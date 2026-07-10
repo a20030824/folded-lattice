@@ -42,6 +42,7 @@ const fallbackCrease: CreaseConfig = {
   paperLit: "#3b372e",
   paperShadow: "#15130f",
   ridgeColor: "#eadfc7",
+  shadowTint: "#242b3a",
 };
 
 /**
@@ -322,7 +323,21 @@ export const creaseTopologyBuilder = {
 
     const creaseNodeCount = points.length;
 
-    // 2. Open-facet nodes: density decays away from creases and crush zones.
+    // 2. A deterministic ring outside the viewport guarantees the convex
+    // hull always contains every corner - no background can ever show.
+    const ringMinX = -overscan;
+    const ringMaxX = viewport.width + overscan;
+    const ringMinY = -overscan;
+    const ringMaxY = viewport.height + overscan;
+    for (let t = 0; t < 4; t += 1) {
+      const fraction = t / 4;
+      points.push({ x: ringMinX + (ringMaxX - ringMinX) * fraction, y: ringMinY });
+      points.push({ x: ringMaxX, y: ringMinY + (ringMaxY - ringMinY) * fraction });
+      points.push({ x: ringMaxX - (ringMaxX - ringMinX) * fraction, y: ringMaxY });
+      points.push({ x: ringMinX, y: ringMaxY - (ringMaxY - ringMinY) * fraction });
+    }
+
+    // 3. Open-facet nodes: density decays away from creases and crush zones.
     const near = shortSide * settings.nearDensityRatio;
     const far = shortSide * settings.farDensityRatio;
     const falloff = shortSide * settings.densityFalloffRatio;
@@ -369,7 +384,7 @@ export const creaseTopologyBuilder = {
       return { nodes: [], edges: [], triangles: [], creaseEdges: [] };
     }
 
-    // 3. Crumple the rest pose before edges exist, so rest lengths are 3D.
+    // 4. Crumple the rest pose before edges exist, so rest lengths are 3D.
     const delaunay = Delaunator.from(points, (point) => point.x, (point) => point.y);
     const hullNodes = new Set<number>(delaunay.hull);
     const nodes: NodeState[] = points.map((point, id) => {

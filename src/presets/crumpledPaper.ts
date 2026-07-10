@@ -91,7 +91,7 @@ const config: FoldedLatticeConfig = {
       nodeGlintOpacity: 0,
     },
     colors: {
-      background: "#0a0908",
+      background: "#10131a",
       edge: "#000000",
       edgeHighlight: "#000000",
       trianglePositive: "#000000",
@@ -118,9 +118,10 @@ const config: FoldedLatticeConfig = {
     grainOpacity: 0.35,
     valleyShadowStrength: 0.5,
     ridgeLightStrength: 0.55,
-    paperLit: "#5a5346",
-    paperShadow: "#161310",
+    paperLit: "#b3a78c",
+    paperShadow: "#4c545f",
     ridgeColor: "#f0e6d2",
+    shadowTint: "#242b3a",
   },
 };
 
