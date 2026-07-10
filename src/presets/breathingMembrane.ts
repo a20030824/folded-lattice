@@ -6,6 +6,7 @@ import { pressureFieldSystem } from "../core/fields/pressureField";
 import { memorySystem } from "../core/memory/updateMemory";
 import { revealSystem } from "../core/reveal/updateReveal";
 import { springSystem } from "../core/simulation/applySprings";
+import { membranePulseSystem } from "../core/simulation/membranePulse";
 import { integrationSystem } from "../core/simulation/integrate";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
@@ -53,25 +54,27 @@ const config: FoldedLatticeConfig = {
   memory: {
     enabled: true,
     edgeAccumulationRate: 0.025,
-    edgeDecayRate: 0.0025,
+    // Fast enough that pulse traces read as "just before" yet cannot
+    // stack across pulses into a permanently revealed web.
+    edgeDecayRate: 0.008,
     edgeRestLengthInfluence: 0.012,
     triangleAccumulationRate: 0.018,
-    triangleDecayRate: 0.0018,
+    triangleDecayRate: 0.004,
     maximumMemory: 0.7,
   },
   reveal: {
     edgeBaseVisibility: 0.045,
     edgeTensionThreshold: 0.006,
     edgeTensionGain: 22,
-    edgeMemoryGain: 0.22,
+    edgeMemoryGain: 0.34,
     triangleFoldThreshold: 0.03,
     triangleFoldGain: 6.5,
-    triangleMemoryGain: 0.14,
+    triangleMemoryGain: 0.2,
     revealAttack: 1.6,
     revealRelease: 0.4,
     maximumVisibleEdgeRatio: 0.4,
     maximumVisibleTriangleRatio: 0.3,
-    patchScale: 2.4,
+    patchScale: 1.9,
     patchDriftSpeed: 0.045,
     patchTrace: 0.3,
   },
@@ -97,6 +100,7 @@ const config: FoldedLatticeConfig = {
       trianglePositive: "#b9cdd8",
       triangleNegative: "#274050",
       glow: "#5f8ba0",
+      pulse: "#f0ddb4",
     },
   },
   performance: {
@@ -104,6 +108,16 @@ const config: FoldedLatticeConfig = {
     fixedSimulationFps: 60,
     maximumSubSteps: 3,
     maximumDevicePixelRatio: 2,
+  },
+  pulse: {
+    enabled: true,
+    intervalSeconds: 42,
+    speedRatio: 0.1,
+    bandRatio: 0.055,
+    falloffRatio: 0.24,
+    memoryDeposit: 0.55,
+    kickStrength: 18,
+    memoryOriginChance: 0.55,
   },
 };
 
@@ -119,6 +133,7 @@ export const breathingMembranePreset: PresetDefinition = {
     pressureFieldSystem,
     ambientDriftSystem,
     mouseFieldSystem,
+    membranePulseSystem,
     springSystem,
     integrationSystem,
     geometrySystem,

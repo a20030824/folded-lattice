@@ -594,6 +594,7 @@ export const creaseTopologyBuilder = {
         memory: 0,
         visibility: 0,
         highlight: 0,
+        pulse: 0,
       });
       edgeByNodes.set(key, id);
       a.edgeIndices.push(id);

@@ -27,6 +27,10 @@ export interface EdgeState {
   memory: number;
   visibility: number;
   highlight: number;
+  /**
+   * Warm wavefront intensity while a tension pulse is crossing this edge.
+   */
+  pulse: number;
 }
 
 export interface TriangleState {

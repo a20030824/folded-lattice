@@ -171,6 +171,7 @@ export const delaunayTopologyBuilder = {
         memory: 0,
         visibility: config.reveal.edgeBaseVisibility,
         highlight: 0,
+        pulse: 0,
       });
       edgeByNodes.set(key, id);
       a.edgeIndices.push(id);

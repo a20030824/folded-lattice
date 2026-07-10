@@ -21,6 +21,10 @@ interface Palette {
   edgeStroke: string[];
   edgeHighlight: string;
   glint: string;
+  /**
+   * Warm "now" color of a travelling pulse; null disables the pass.
+   */
+  pulse: string | null;
 }
 
 function buildPalette(colors: {
@@ -30,15 +34,9 @@ function buildPalette(colors: {
   trianglePositive: string;
   triangleNegative: string;
   glow: string;
+  pulse?: string;
 }): Palette {
-  const key = [
-    colors.background,
-    colors.edge,
-    colors.edgeHighlight,
-    colors.trianglePositive,
-    colors.triangleNegative,
-    colors.glow,
-  ].join("|");
+  const key = buildPaletteKey(colors);
 
   const background = parseColor(colors.background, { r: 10, g: 14, b: 19 });
   const glow = parseColor(colors.glow, { r: 120, g: 160, b: 175 });
@@ -67,6 +65,7 @@ function buildPalette(colors: {
     edgeStroke,
     edgeHighlight: rgbString(highlight),
     glint: rgbString(mixRgb(highlight, { r: 255, g: 255, b: 255 }, 0.4)),
+    pulse: colors.pulse ? rgbString(parseColor(colors.pulse)) : null,
   };
 }
 
@@ -327,6 +326,37 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
         context.stroke();
       }
 
+      // Travelling pulse: the warm front reads as "now" against the cool
+      // membrane; the trace it leaves behind is ordinary edge memory.
+      if (palette.pulse) {
+        context.strokeStyle = palette.pulse;
+        for (const edge of edges) {
+          if (edge.pulse < 0.02) continue;
+          const a = nodes[edge.nodeA];
+          const b = nodes[edge.nodeB];
+          if (!a || !b) continue;
+
+          const ax = projectedX(a, render.depthProjection);
+          const ay = projectedY(a, render.depthProjection);
+          const bx = projectedX(b, render.depthProjection);
+          const by = projectedY(b, render.depthProjection);
+
+          context.globalAlpha = edge.pulse * 0.14;
+          context.lineWidth = render.edgeMaximumWidth * 4.2;
+          context.beginPath();
+          context.moveTo(ax, ay);
+          context.lineTo(bx, by);
+          context.stroke();
+
+          context.globalAlpha = edge.pulse * 0.8;
+          context.lineWidth = render.edgeMaximumWidth * 1.1;
+          context.beginPath();
+          context.moveTo(ax, ay);
+          context.lineTo(bx, by);
+          context.stroke();
+        }
+      }
+
       // Dew: tiny points where several visible edges meet.
       if (atmosphere.nodeGlintOpacity > 0) {
         context.fillStyle = palette.glint;
@@ -369,6 +399,7 @@ function buildPaletteKey(colors: {
   trianglePositive: string;
   triangleNegative: string;
   glow: string;
+  pulse?: string;
 }): string {
   return [
     colors.background,
@@ -377,5 +408,6 @@ function buildPaletteKey(colors: {
     colors.trianglePositive,
     colors.triangleNegative,
     colors.glow,
+    colors.pulse ?? "",
   ].join("|");
 }

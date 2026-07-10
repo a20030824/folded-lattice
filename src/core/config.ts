@@ -93,6 +93,11 @@ export interface ColorConfig {
    * Tint of the faint breathing glow under pressure fields.
    */
   glow: string;
+  /**
+   * Warm "now" color of a travelling tension pulse. Absent means the
+   * renderer never draws a pulse pass.
+   */
+  pulse?: string;
 }
 
 export interface AtmosphereConfig {
@@ -235,6 +240,49 @@ export interface ContourConfig {
   backgroundLift: string;
 }
 
+/**
+ * The membrane's long-period event: every few dozen seconds a tension
+ * pulse is born at one node and travels outward through the edge graph.
+ * The warm front is "now"; the structural memory it deposits stays
+ * visible for minutes as a cooling trace of "just before".
+ */
+export interface PulseConfig {
+  enabled: boolean;
+  /**
+   * Average pause between pulses, randomized ±30%.
+   */
+  intervalSeconds: number;
+  /**
+   * Front speed in short-sides per second.
+   */
+  speedRatio: number;
+  /**
+   * Front thickness as a ratio of the short side.
+   */
+  bandRatio: number;
+  /**
+   * Distance (in short sides) over which the pulse loses ~63% of its
+   * energy. Keeps the event local: a strong mark near the origin, only
+   * a faint ripple at the far side — otherwise the trace would cover
+   * the whole membrane and read as homogeneous brightening.
+   */
+  falloffRatio: number;
+  /**
+   * Memory deposited per second on an edge fully inside the front.
+   */
+  memoryDeposit: number;
+  /**
+   * Upward force on nodes as the front passes; the membrane physically
+   * breathes the event instead of only being repainted.
+   */
+  kickStrength: number;
+  /**
+   * Chance that a pulse originates at the most-remembered node (where
+   * the membrane was touched) instead of a random interior one.
+   */
+  memoryOriginChance: number;
+}
+
 export interface FoldedLatticeConfig {
   topology: TopologyConfig;
   physics: PhysicsConfig;
@@ -245,4 +293,5 @@ export interface FoldedLatticeConfig {
   performance: PerformanceConfig;
   crease?: CreaseConfig;
   contour?: ContourConfig;
+  pulse?: PulseConfig;
 }
