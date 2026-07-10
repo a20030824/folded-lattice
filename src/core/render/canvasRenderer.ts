@@ -231,21 +231,6 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
           );
         }
 
-        const pointer = state.pointer;
-        if (pointer.influence > 0.01) {
-          const radius =
-            Math.min(viewport.width, viewport.height) *
-            config.fields.pointer.radiusRatio *
-            atmosphere.fieldGlowScale;
-          context.globalAlpha = atmosphere.fieldGlowOpacity * 0.8 * pointer.influence;
-          context.drawImage(
-            glowSprite,
-            pointer.position.x - radius,
-            pointer.position.y - radius,
-            radius * 2,
-            radius * 2,
-          );
-        }
         context.globalCompositeOperation = "source-over";
       }
 
