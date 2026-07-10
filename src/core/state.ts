@@ -95,11 +95,21 @@ export interface CreaseState {
   sign: 1 | -1;
   points: CreasePointState[];
   widthRatio: number;
+  /**
+   * Final width once the fold has set; fresh folds start wider and
+   * narrow as they mature.
+   */
+  targetWidthRatio: number;
+  /**
+   * Seconds after birth until the fold is fully set (width settled).
+   */
+  maturitySeconds: number;
   strength: number;
   /**
    * 0..1 fraction of the polyline that currently exists.
    */
   growth: number;
+  growthPerSecond: number;
   /**
    * Strength lost per second; 0 for permanent folds.
    */

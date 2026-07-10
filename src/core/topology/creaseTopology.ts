@@ -132,14 +132,18 @@ export function buildCreaseState(
       arc: totalLength > 0 ? lengths[index]! / totalLength : 0,
     })),
     widthRatio,
+    targetWidthRatio: widthRatio,
+    maturitySeconds: 0,
     strength,
     growth,
+    growthPerSecond: 0,
     fadePerSecond,
     age: 0,
-    minX: minX - influence,
-    minY: minY - influence,
-    maxX: maxX + influence,
-    maxY: maxY + influence,
+    // Inflate by 1.5x so a fresh, still-wide fold never escapes its box.
+    minX: minX - influence * 1.5,
+    minY: minY - influence * 1.5,
+    maxX: maxX + influence * 1.5,
+    maxY: maxY + influence * 1.5,
   };
 }
 
@@ -490,6 +494,50 @@ export const creaseTopologyBuilder = {
 
     if (points.length < 3) {
       return { nodes: [], edges: [], triangles: [], creaseEdges: [] };
+    }
+
+    // 3b. Relax open-facet nodes toward their neighbors: sparse regions
+    // otherwise triangulate into long, oddly regular slivers. Crease and
+    // ring nodes stay fixed so folds and coverage are untouched.
+    const relaxStart = creaseNodeCount + 16;
+    for (let iteration = 0; iteration < 2; iteration += 1) {
+      const relaxation = Delaunator.from(points, (point) => point.x, (point) => point.y);
+      const sumX = new Float64Array(points.length);
+      const sumY = new Float64Array(points.length);
+      const neighborCounts = new Int32Array(points.length);
+      const triangleIndices = relaxation.triangles;
+      for (let index = 0; index < triangleIndices.length; index += 3) {
+        const a = triangleIndices[index]!;
+        const b = triangleIndices[index + 1]!;
+        const c = triangleIndices[index + 2]!;
+        for (const [from, to] of [[a, b], [b, c], [c, a], [b, a], [c, b], [a, c]] as const) {
+          sumX[from] = (sumX[from] ?? 0) + points[to]!.x;
+          sumY[from] = (sumY[from] ?? 0) + points[to]!.y;
+          neighborCounts[from] = (neighborCounts[from] ?? 0) + 1;
+        }
+      }
+      for (let index = relaxStart; index < points.length; index += 1) {
+        const count = neighborCounts[index]!;
+        if (count === 0) continue;
+        const point = points[index]!;
+        const targetX = point.x + (sumX[index]! / count - point.x) * 0.5;
+        const targetY = point.y + (sumY[index]! / count - point.y) * 0.5;
+
+        let creaseDistanceSquared = Number.POSITIVE_INFINITY;
+        for (let creaseIndex = 0; creaseIndex < creaseNodeCount; creaseIndex += 1) {
+          const creaseNode = points[creaseIndex]!;
+          const dx = creaseNode.x - targetX;
+          const dy = creaseNode.y - targetY;
+          const distanceSquared = dx * dx + dy * dy;
+          if (distanceSquared < creaseDistanceSquared) {
+            creaseDistanceSquared = distanceSquared;
+          }
+        }
+        if (creaseDistanceSquared < near * near * 0.7) continue;
+
+        point.x = clamp(targetX, -overscan, viewport.width + overscan);
+        point.y = clamp(targetY, -overscan, viewport.height + overscan);
+      }
     }
 
     // 4. Crumple the rest pose before edges exist, so rest lengths are 3D.

@@ -211,6 +211,11 @@ export interface CreaseLifeConfig {
    */
   pressSeconds: number;
   maximumMinorCount: number;
+  /**
+   * The skeleton iterates too, on a much longer period: about this often
+   * one major fold hands over to a newly grown one. 0 disables.
+   */
+  majorIntervalSeconds: number;
 }
 
 /**

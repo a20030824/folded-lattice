@@ -131,6 +131,7 @@ const config: FoldedLatticeConfig = {
       fadeSeconds: 110,
       pressSeconds: 1.1,
       maximumMinorCount: 10,
+      majorIntervalSeconds: 200,
     },
   },
 };
