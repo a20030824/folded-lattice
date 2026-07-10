@@ -1,0 +1,104 @@
+import type { FoldedLatticeConfig } from "../core/config";
+
+declare global {
+  interface Window {
+    livelyPropertyListener?: (name: string, value: unknown) => void;
+  }
+}
+
+interface LivelyBridgeControls {
+  rebuildTopology(): void;
+  refreshRenderer(): void;
+}
+
+const defaults = {
+  pressureMinimumStrength: 18,
+  pressureMaximumStrength: 42,
+  pressureMinimumRadius: 0.12,
+  pressureMaximumRadius: 0.27,
+  pressureMinimumSpeed: 2,
+  pressureMaximumSpeed: 8,
+  ambientSpeed: 0.045,
+  edgeRestLengthInfluence: 0.012,
+  pointerStrength: 38,
+};
+
+function asNumber(value: unknown, fallback: number): number {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+export function installLivelyBridge(
+  config: FoldedLatticeConfig,
+  controls: LivelyBridgeControls,
+): () => void {
+  let rebuildTimer = 0;
+
+  const scheduleRebuild = (): void => {
+    window.clearTimeout(rebuildTimer);
+    rebuildTimer = window.setTimeout(controls.rebuildTopology, 120);
+  };
+
+  window.livelyPropertyListener = (name, value) => {
+    switch (name) {
+      case "backgroundColor":
+        if (typeof value === "string") config.render.colors.background = value;
+        break;
+      case "edgeBrightness":
+        config.render.edgeOpacity = asNumber(value, 55) / 100;
+        break;
+      case "triangleVisibility":
+        config.render.triangleOpacity = asNumber(value, 20) / 100;
+        break;
+      case "nodeCount":
+        config.topology.nodeCount = Math.round(asNumber(value, 120));
+        scheduleRebuild();
+        break;
+      case "pressureStrength": {
+        const scale = asNumber(value, 100) / 100;
+        config.fields.pressure.minimumStrength = defaults.pressureMinimumStrength * scale;
+        config.fields.pressure.maximumStrength = defaults.pressureMaximumStrength * scale;
+        break;
+      }
+      case "pressureRadius": {
+        const scale = asNumber(value, 100) / 100;
+        config.fields.pressure.minimumRadiusRatio = defaults.pressureMinimumRadius * scale;
+        config.fields.pressure.maximumRadiusRatio = defaults.pressureMaximumRadius * scale;
+        break;
+      }
+      case "memoryStrength":
+        config.memory.edgeRestLengthInfluence =
+          defaults.edgeRestLengthInfluence * (asNumber(value, 100) / 100);
+        config.memory.enabled = asNumber(value, 100) > 0;
+        break;
+      case "motionSpeed": {
+        const scale = asNumber(value, 100) / 100;
+        config.fields.pressure.minimumSpeed = defaults.pressureMinimumSpeed * scale;
+        config.fields.pressure.maximumSpeed = defaults.pressureMaximumSpeed * scale;
+        config.fields.ambient.speed = defaults.ambientSpeed * scale;
+        break;
+      }
+      case "mouseInteraction":
+        config.fields.pointer.enabled = value === true || value === "true";
+        break;
+      case "mouseStrength":
+        config.fields.pointer.strength =
+          defaults.pointerStrength * (asNumber(value, 100) / 100);
+        break;
+      case "quality": {
+        const quality = asNumber(value, 1);
+        config.performance.maximumDevicePixelRatio = quality <= 0 ? 1 : quality >= 2 ? 2.5 : 2;
+        controls.refreshRenderer();
+        break;
+      }
+      case "targetFps":
+        config.performance.targetFps = asNumber(value, 1) <= 0 ? 30 : 60;
+        break;
+    }
+  };
+
+  return () => {
+    window.clearTimeout(rebuildTimer);
+    delete window.livelyPropertyListener;
+  };
+}

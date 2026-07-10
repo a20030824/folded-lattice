@@ -1,0 +1,96 @@
+{
+  "backgroundColor": {
+    "text": "Background",
+    "type": "color",
+    "value": "#0a0e14"
+  },
+  "edgeBrightness": {
+    "max": 100,
+    "min": 5,
+    "step": 1,
+    "text": "Edge brightness",
+    "type": "slider",
+    "help": "Brightness of the structural lines",
+    "value": 55
+  },
+  "triangleVisibility": {
+    "max": 40,
+    "min": 0,
+    "step": 0.5,
+    "text": "Triangle visibility",
+    "type": "slider",
+    "help": "Opacity of revealed folded surfaces",
+    "value": 20
+  },
+  "nodeCount": {
+    "max": 220,
+    "min": 60,
+    "step": 5,
+    "text": "Node count",
+    "type": "slider",
+    "help": "Structural density; changing this rebuilds the lattice",
+    "value": 120
+  },
+  "pressureStrength": {
+    "max": 180,
+    "min": 0,
+    "step": 5,
+    "text": "Pressure strength",
+    "type": "slider",
+    "help": "Depth of the slow breathing deformation",
+    "value": 100
+  },
+  "pressureRadius": {
+    "max": 160,
+    "min": 40,
+    "step": 5,
+    "text": "Pressure radius",
+    "type": "slider",
+    "help": "Size of the moving pressure fields",
+    "value": 100
+  },
+  "memoryStrength": {
+    "max": 200,
+    "min": 0,
+    "step": 5,
+    "text": "Memory strength",
+    "type": "slider",
+    "help": "How much past deformation influences the resting structure",
+    "value": 100
+  },
+  "motionSpeed": {
+    "max": 200,
+    "min": 20,
+    "step": 5,
+    "text": "Motion speed",
+    "type": "slider",
+    "help": "Travel speed of the ambient pressure fields",
+    "value": 100
+  },
+  "mouseInteraction": {
+    "text": "Mouse interaction",
+    "type": "checkbox",
+    "value": true
+  },
+  "mouseStrength": {
+    "max": 200,
+    "min": 0,
+    "step": 5,
+    "text": "Mouse strength",
+    "type": "slider",
+    "help": "Strength of hover and drag deformation",
+    "value": 100
+  },
+  "quality": {
+    "type": "dropdown",
+    "value": 1,
+    "text": "Quality",
+    "items": ["Low", "Balanced", "High"]
+  },
+  "targetFps": {
+    "type": "dropdown",
+    "value": 1,
+    "text": "Target FPS",
+    "items": ["30", "60"]
+  }
+}

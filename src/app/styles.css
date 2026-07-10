@@ -1,0 +1,35 @@
+:root {
+  color-scheme: dark;
+  background: #090c0f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #090c0f;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+#wallpaper {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+noscript {
+  position: fixed;
+  inset: 1rem;
+  color: #ccd7da;
+  font: 14px/1.5 system-ui, sans-serif;
+}
