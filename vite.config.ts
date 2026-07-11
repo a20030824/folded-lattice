@@ -7,4 +7,11 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2020",
   },
+  server: {
+    watch: {
+      // .tmp holds throwaway browser profiles from headless test runs;
+      // watching them crashes the dev server on locked cookie files.
+      ignored: ["**/.tmp/**"],
+    },
+  },
 });

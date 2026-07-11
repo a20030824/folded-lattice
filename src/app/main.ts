@@ -2,11 +2,15 @@ import "./styles.css";
 
 import { createEngine } from "../core/createEngine";
 import { createCanvasRenderer } from "../core/render/canvasRenderer";
+import { createContourRenderer } from "../core/render/contourRenderer";
+import { createInkRenderer } from "../core/render/inkRenderer";
 import { createPaperRenderer } from "../core/render/paperRenderer";
 import { createWebglPaperRenderer } from "../core/render/webglPaperRenderer";
 import type { Viewport } from "../core/types";
 import { breathingMembranePreset } from "../presets/breathingMembrane";
 import { crumpledPaperPreset } from "../presets/crumpledPaper";
+import { tideArchivePreset } from "../presets/tideArchive";
+import { wanderingInkPreset } from "../presets/wanderingInk";
 import { installLivelyBridge } from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
 
@@ -19,10 +23,18 @@ const getViewport = (): Viewport => ({
   devicePixelRatio: window.devicePixelRatio || 1,
 });
 
-// ?preset=paper switches to the crumpled-paper prototype; default stays v1.
 const presetName = new URLSearchParams(window.location.search).get("preset");
-const preset = presetName === "paper" ? crumpledPaperPreset : breathingMembranePreset;
+const preset =
+  presetName === "paper"
+    ? crumpledPaperPreset
+    : presetName === "tide" || presetName === "archive"
+      ? tideArchivePreset
+      : presetName === "membrane"
+        ? breathingMembranePreset
+        : wanderingInkPreset;
 function createRendererFor(presetId: string): ReturnType<typeof createCanvasRenderer> {
+  if (presetId === "tide-archive") return createContourRenderer(canvas!);
+  if (presetId === "wandering-ink") return createInkRenderer(canvas!);
   if (presetId !== "crumpled-paper") return createCanvasRenderer(canvas!);
   try {
     return createWebglPaperRenderer(canvas!);

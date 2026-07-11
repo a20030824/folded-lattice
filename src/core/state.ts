@@ -141,6 +141,28 @@ export interface CreaseFieldState {
   nextCreaseId: number;
 }
 
+/**
+ * One sample of the wanderer's body, tail to head. Width factor records
+ * how fast the creature moved when this point was laid down - slow
+ * travel pools into a wider stroke, like a brush.
+ */
+export interface CreaturePointState {
+  x: number;
+  y: number;
+  widthFactor: number;
+}
+
+/**
+ * A single line-creature that roams the sheet. It is the only actor:
+ * its path dents the terrain, and the pointer only ever talks to it.
+ */
+export interface CreatureState {
+  points: CreaturePointState[];
+  heading: number;
+  speed: number;
+  distanceSinceSample: number;
+}
+
 export interface TopologyState {
   nodes: NodeState[];
   edges: EdgeState[];
@@ -155,6 +177,7 @@ export interface SimulationState {
   pointer: PointerState;
   viewport: Viewport;
   time: TimeState;
+  creature?: CreatureState;
 }
 
 export function createEmptySimulationState(viewport: Viewport): SimulationState {
