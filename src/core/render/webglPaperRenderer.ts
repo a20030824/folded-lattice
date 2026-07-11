@@ -46,10 +46,6 @@ uniform vec2 uResolution;
 uniform float uAspect;
 uniform float uGrain;
 uniform float uSheen;
-uniform sampler2D uTransitionSnapshot;
-uniform sampler2D uTransitionMask;
-uniform float uTransitionActive;
-uniform float uTransitionProgress;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -103,18 +99,6 @@ void main() {
   // Vignette settles into the same shadow air instead of black.
   float centerDistance = distance(vUv * vec2(uAspect, 1.0), vec2(0.5 * uAspect, 0.5));
   color = mix(color, uShadowTint * 0.85, smoothstep(0.44, 1.1, centerDistance) * 0.3);
-
-  // A topology handover keeps the old sheet only where the new crease
-  // has not yet claimed it. The snapshot is never a second paper for
-  // long: it melts away globally while the growing rail clears a local
-  // path from its birth point outward.
-  if (uTransitionActive > 0.5) {
-    vec2 textureUv = vec2(vUv.x, 1.0 - vUv.y);
-    float localReveal = texture2D(uTransitionMask, textureUv).a;
-    float oldAlpha = (1.0 - uTransitionProgress) * (1.0 - localReveal);
-    vec3 oldColor = texture2D(uTransitionSnapshot, textureUv).rgb;
-    color = mix(color, oldColor, oldAlpha);
-  }
 
   gl_FragColor = vec4(color, 1.0);
 }
@@ -174,7 +158,6 @@ interface MeshBinding {
  */
 const NORMAL_SMOOTHING = 0.78;
 const TOPOLOGY_HANDOVER_SECONDS = 0.72;
-const TRANSITION_MASK_SCALE = 0.28;
 
 interface TopologyTransition {
   startedAt: number;
@@ -337,58 +320,15 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     aspect: gl.getUniformLocation(program, "uAspect"),
     grain: gl.getUniformLocation(program, "uGrain"),
     sheen: gl.getUniformLocation(program, "uSheen"),
-    transitionSnapshot: gl.getUniformLocation(program, "uTransitionSnapshot"),
-    transitionMask: gl.getUniformLocation(program, "uTransitionMask"),
-    transitionActive: gl.getUniformLocation(program, "uTransitionActive"),
-    transitionProgress: gl.getUniformLocation(program, "uTransitionProgress"),
   };
 
   const positionBuffer = gl.createBuffer();
   const normalBuffer = gl.createBuffer();
   const occlusionBuffer = gl.createBuffer();
-  const transitionSnapshot = gl.createTexture();
-  const transitionMask = gl.createTexture();
-  if (!transitionSnapshot || !transitionMask) {
-    throw new Error("Failed to create paper transition textures.");
-  }
 
   let viewport: Viewport = { width: 1, height: 1, devicePixelRatio: 1 };
   let mesh: MeshBinding | null = null;
   let transition: TopologyTransition | null = null;
-  const transitionMaskCanvas = document.createElement("canvas");
-  const transitionMaskContext = transitionMaskCanvas.getContext("2d")!;
-
-  const configureTexture = (texture: WebGLTexture): void => {
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  };
-  configureTexture(transitionSnapshot);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    1,
-    1,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    new Uint8Array([0, 0, 0, 255]),
-  );
-  configureTexture(transitionMask);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    1,
-    1,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    new Uint8Array([0, 0, 0, 0]),
-  );
 
   const uploadStatic = (): void => {
     if (!mesh) return;
@@ -400,7 +340,13 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     gl.bufferData(gl.ARRAY_BUFFER, mesh.occlusions.byteLength, gl.DYNAMIC_DRAW);
   };
 
-  const updateMesh = (state: Readonly<SimulationState>, depthProjection: number, occlusionStrength: number): void => {
+  const updateMesh = (
+    state: Readonly<SimulationState>,
+    depthProjection: number,
+    occlusionStrength: number,
+    handoverProgress: number,
+    handoverCreaseId: number | null,
+  ): void => {
     if (!mesh) return;
     const { nodes, triangles } = state.topology;
     const {
@@ -476,6 +422,9 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
             sharpness =
               clamp(crease.strength * 1.4) *
               clamp((crease.growth - vertexFromOrigin[vertex]!) / 0.12);
+            if (creaseId === handoverCreaseId) {
+              sharpness *= handoverProgress;
+            }
           }
         }
 
@@ -518,9 +467,14 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
           smoothZ /= blended;
         }
 
-        let x = smoothX * NORMAL_SMOOTHING + flatX * (1 - NORMAL_SMOOTHING);
-        let y = smoothY * NORMAL_SMOOTHING + flatY * (1 - NORMAL_SMOOTHING);
-        let z = smoothZ * NORMAL_SMOOTHING + flatZ * (1 - NORMAL_SMOOTHING);
+        // At a mesh handover the new triangulation arrives as an almost
+        // continuous sheet, then regains its authored paper facets. This
+        // hides connectivity changes without drawing a second paper layer.
+        const smoothing =
+          NORMAL_SMOOTHING + (1 - NORMAL_SMOOTHING) * (1 - handoverProgress);
+        let x = smoothX * smoothing + flatX * (1 - smoothing);
+        let y = smoothY * smoothing + flatY * (1 - smoothing);
+        let z = smoothZ * smoothing + flatZ * (1 - smoothing);
         const length = Math.max(1e-6, Math.hypot(x, y, z));
         x /= length;
         y /= length;
@@ -535,9 +489,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
   };
 
   const beginTopologyTransition = (state: Readonly<SimulationState>): void => {
-    // transitionSnapshot was copied at the end of the previous normal
-    // frame. Reading the default framebuffer only now is unreliable: it
-    // may already have been discarded by the browser after presentation.
     const field = state.topology.creaseField;
     const newborn = field?.creases.reduce<CreaseState | null>(
       (latest, crease) =>
@@ -548,50 +499,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       startedAt: state.time.elapsed,
       creaseId: newborn?.id ?? null,
     };
-  };
-
-  const updateTransitionMask = (
-    state: Readonly<SimulationState>,
-    activeTransition: TopologyTransition,
-  ): void => {
-    const width = Math.max(2, Math.round(viewport.width * TRANSITION_MASK_SCALE));
-    const height = Math.max(2, Math.round(viewport.height * TRANSITION_MASK_SCALE));
-    if (transitionMaskCanvas.width !== width || transitionMaskCanvas.height !== height) {
-      transitionMaskCanvas.width = width;
-      transitionMaskCanvas.height = height;
-    }
-    transitionMaskContext.setTransform(
-      TRANSITION_MASK_SCALE,
-      0,
-      0,
-      TRANSITION_MASK_SCALE,
-      0,
-      0,
-    );
-    transitionMaskContext.clearRect(0, 0, viewport.width, viewport.height);
-
-    const field = state.topology.creaseField;
-    const crease = field?.creases.find((item) => item.id === activeTransition.creaseId);
-    if (field && crease) {
-      // A soft band is revealed from the press point out along both arms.
-      // The band is intentionally wider than the eventual sharp rail: it
-      // lets the old facets melt before the new normal split becomes legible.
-      const radius = field.shortSide * 0.09;
-      for (const point of crease.points) {
-        const alpha = clamp((crease.growth - point.fromOrigin + 0.15) / 0.15);
-        if (alpha <= 0) continue;
-        transitionMaskContext.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        transitionMaskContext.beginPath();
-        transitionMaskContext.arc(point.x, point.y, radius, 0, Math.PI * 2);
-        transitionMaskContext.fill();
-      }
-    }
-
-    gl.activeTexture(gl.TEXTURE1);
-    configureTexture(transitionMask);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, transitionMaskCanvas);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   };
 
   return {
@@ -606,19 +513,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       canvas.style.width = `${nextViewport.width}px`;
       canvas.style.height = `${nextViewport.height}px`;
       gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.activeTexture(gl.TEXTURE0);
-      configureTexture(transitionSnapshot);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        canvas.width,
-        canvas.height,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null,
-      );
     },
 
     render(state, config) {
@@ -632,7 +526,24 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
         uploadStatic();
       }
 
-      updateMesh(state, config.render.depthProjection, settings.valleyShadowStrength);
+      let handoverProgress = 1;
+      let handoverCreaseId: number | null = null;
+      if (transition) {
+        const linearProgress = clamp(
+          (state.time.elapsed - transition.startedAt) / TOPOLOGY_HANDOVER_SECONDS,
+        );
+        handoverProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
+        handoverCreaseId = transition.creaseId;
+        if (linearProgress >= 1) transition = null;
+      }
+
+      updateMesh(
+        state,
+        config.render.depthProjection,
+        settings.valleyShadowStrength,
+        handoverProgress,
+        handoverCreaseId,
+      );
 
       const background = parseColor(config.render.colors.background);
       gl.clearColor(background.r / 255, background.g / 255, background.b / 255, 1);
@@ -669,24 +580,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       gl.uniform1f(uniforms.grain, settings.grainOpacity * 0.32);
       gl.uniform1f(uniforms.sheen, settings.ridgeLightStrength * 0.12);
 
-      let transitionProgress = 1;
-      if (transition) {
-        transitionProgress = clamp(
-          (state.time.elapsed - transition.startedAt) / TOPOLOGY_HANDOVER_SECONDS,
-        );
-        if (transitionProgress >= 1) {
-          transition = null;
-        }
-      }
-      const transitionActive = transition !== null;
-      if (transition) updateTransitionMask(state, transition);
-      gl.activeTexture(gl.TEXTURE0);
-      configureTexture(transitionSnapshot);
-      gl.uniform1i(uniforms.transitionSnapshot, 0);
-      gl.uniform1i(uniforms.transitionMask, 1);
-      gl.uniform1f(uniforms.transitionActive, transitionActive ? 1 : 0);
-      gl.uniform1f(uniforms.transitionProgress, transitionProgress);
-
       gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.positions);
       gl.enableVertexAttribArray(attributes.position);
@@ -703,32 +596,12 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       gl.vertexAttribPointer(attributes.occlusion, 1, gl.FLOAT, false, 0, 0);
 
       gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount);
-
-      // Save this complete paper BEFORE the browser presents/discards its
-      // default framebuffer. A later topology event can safely use it as
-      // the outgoing image without another simulation or a black readback.
-      if (!transition) {
-        gl.activeTexture(gl.TEXTURE0);
-        configureTexture(transitionSnapshot);
-        gl.copyTexSubImage2D(
-          gl.TEXTURE_2D,
-          0,
-          0,
-          0,
-          0,
-          0,
-          canvas.width,
-          canvas.height,
-        );
-      }
     },
 
     dispose() {
       gl.deleteBuffer(positionBuffer);
       gl.deleteBuffer(normalBuffer);
       gl.deleteBuffer(occlusionBuffer);
-      gl.deleteTexture(transitionSnapshot);
-      gl.deleteTexture(transitionMask);
       gl.deleteProgram(program);
       canvas.width = 1;
       canvas.height = 1;
