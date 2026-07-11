@@ -225,6 +225,19 @@ export interface CreaseLifeConfig {
    * one major fold hands over to a newly grown one. 0 disables.
    */
   majorIntervalSeconds: number;
+  /**
+   * The major count itself may drift inside these bounds: a handover
+   * sometimes only retires, sometimes only grows. Both default to the
+   * built count when absent.
+   */
+  minimumMajorCount?: number;
+  maximumMajorCount?: number;
+  /**
+   * Event-rate multiplier while nobody is at the desk (pointer absent
+   * for a while) - the paper lives a little faster when unwatched.
+   * 1 or absent disables.
+   */
+  idleRateBoost?: number;
 }
 
 /**
@@ -248,6 +261,12 @@ export interface ContourConfig {
   fieldOpacity: number;
   /** Static paper fiber contrast; the chart is a material, not a flat fill. */
   grainOpacity: number;
+  /** Selective minute-scale memory: only scored events enter this layer. */
+  legacyCount: number;
+  legacyDurationSeconds: number;
+  legacyColor: string;
+  legacyOpacity: number;
+  legacyWidth: number;
 }
 
 /**

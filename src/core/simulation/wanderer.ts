@@ -3,6 +3,20 @@ import { clamp, valueNoise2D } from "../math";
 import type { CreatureState, SimulationState } from "../state";
 
 /**
+ * Fear fades over ~6 seconds: leaving the fright radius does not mean
+ * instantly calming down.
+ */
+const FEAR_DECAY_PER_SECOND = 1 / 2.4;
+/**
+ * Fright stretches the body up to this factor of its calm length;
+ * resting draws the tail back in. Length is a mood, not a slider.
+ */
+const FLEE_LENGTH_BOOST = 1.4;
+const REST_LENGTH_FACTOR = 0.5;
+const REST_SPEED_FACTOR = 0.07;
+const REST_TURN_RATE = 1.5;
+
+/**
  * Shortest signed angle from `from` to `to`.
  */
 function angleDelta(from: number, to: number): number {
@@ -22,14 +36,21 @@ function createCreature(state: SimulationState, seed: number): CreatureState {
     heading: hash * Math.PI * 2,
     speed: 0,
     distanceSinceSample: 0,
+    fear: 0,
+    restPool: 0,
+    restSign: hash2 < 0.5 ? -1 : 1,
+    retractTimer: 0,
   };
 }
 
 /**
- * The wandering line-creature. Its pace and curvature breathe on slow
- * noise, walls and the pointer only steer it (never teleport it), and
- * its head presses a travelling dent into the sheet - the terrain is
- * how the world remembers where it has been.
+ * The wandering line-creature, with three states readable from shape
+ * alone: wandering (breathing pace and curvature), resting (speed
+ * sinks to a crawl, the head pools into a drop, the body curls and
+ * draws its tail in), and fleeing (lingering fear stretches and thins
+ * the body until it calms down). Walls and the pointer only steer it,
+ * and its body presses a narrow groove with soft shoulders into the
+ * sheet - the terrain is how the world remembers where it has been.
  */
 export const wandererSystem: SimulationSystem = {
   name: "wanderer",
@@ -46,40 +67,82 @@ export const wandererSystem: SimulationSystem = {
     const shortSide = Math.max(1, Math.min(width, height));
     const time = state.time.elapsed;
     const seed = config.topology.randomSeed * 0.001;
+    const baseSpeed = settings.baseSpeedRatio * shortSide;
 
     const head = creature.points[creature.points.length - 1]!;
     let headX = head.x;
     let headY = head.y;
 
-    // Pace breathes on slow noise: it lingers, then lopes. The square
-    // stretches the slow tail so pauses actually read as pauses.
+    // The pointer is a predator; fright lingers as fear even after the
+    // hand has left. This is the only thing the pointer touches.
+    const pointer = state.pointer;
+    let escapeTurn = 0;
+    if (pointer.isInside && pointer.influence > 0.03) {
+      const awayX = headX - pointer.position.x;
+      const awayY = headY - pointer.position.y;
+      const distance = Math.hypot(awayX, awayY);
+      const frightRadius = settings.pointerRepelRadiusRatio * shortSide;
+      if (distance < frightRadius && distance > 0.001) {
+        const fright = (1 - distance / frightRadius) ** 2 * pointer.influence;
+        creature.fear = Math.max(creature.fear, clamp(fright));
+        const escape = Math.atan2(awayY, awayX);
+        escapeTurn =
+          angleDelta(creature.heading, escape) *
+          clamp(fright * settings.pointerRepelTurnRate, 0, 6);
+      }
+    }
+    creature.fear *= Math.exp(-FEAR_DECAY_PER_SECOND * deltaSeconds);
+    if (creature.fear < 0.002) creature.fear = 0;
+
+    // Pace breathes on slow noise: it lingers, then lopes. When the
+    // noise sinks low enough (and nothing scares it), lingering becomes
+    // a real rest: the creature all but stops and curls up.
     const paceNoise = valueNoise2D(time * 0.09 + seed, seed * 3.1);
     const pace = 0.25 + 1.15 * paceNoise * paceNoise;
-    let targetSpeed = settings.baseSpeedRatio * shortSide * pace;
+    const resting = paceNoise < 0.24 && creature.fear < 0.15;
+    if (resting) {
+      creature.restPool = clamp(creature.restPool + deltaSeconds / 4);
+    } else {
+      if (creature.restPool > 0.5 && paceNoise > 0.3) {
+        // Fresh episode next time; pick a new curl direction.
+        creature.restSign = valueNoise2D(time * 3.7, seed) < 0.5 ? -1 : 1;
+      }
+      creature.restPool = clamp(creature.restPool - deltaSeconds / 2.5);
+    }
 
-    // Curiosity: heading drifts on independent noise.
+    let targetSpeed = baseSpeed * pace;
+    if (resting) targetSpeed = baseSpeed * REST_SPEED_FACTOR;
+    targetSpeed *= 1 + settings.pointerSpeedBoost * creature.fear;
+
+    // Curiosity: heading drifts on independent noise. A resting body
+    // ignores curiosity and slowly curls instead.
     const drift =
       (valueNoise2D(time * 0.17 + seed * 7.7, 41.3 + seed) - 0.5) *
       2 *
       settings.wanderStrength;
-    let turn = drift;
+    let turn = resting
+      ? creature.restSign * REST_TURN_RATE * (0.4 + creature.restPool)
+      : drift;
+    turn += escapeTurn;
 
     // A slow invisible anchor sweeps the whole sheet on a Lissajous
     // orbit (incommensurate periods guarantee full coverage within a
     // few minutes); loosely seeking it keeps the creature from
     // homesteading one corner without ever looking pathfollowed.
-    const jitter = valueNoise2D(time * 0.05 + seed * 13.7, 5.3) - 0.5;
-    const anchorX =
-      width * (0.5 + 0.36 * Math.sin(time * 0.0648 + seed * 11) + 0.06 * jitter);
-    const anchorY =
-      height * (0.5 + 0.36 * Math.sin(time * 0.103 + seed * 23) + 0.06 * jitter);
-    const toAnchorX = anchorX - headX;
-    const toAnchorY = anchorY - headY;
-    const anchorDistance = Math.hypot(toAnchorX, toAnchorY);
-    if (anchorDistance > shortSide * 0.15) {
-      const toAnchor = Math.atan2(toAnchorY, toAnchorX);
-      const longing = clamp((anchorDistance / shortSide - 0.15) * 1.6);
-      turn += angleDelta(creature.heading, toAnchor) * longing * 1.5;
+    if (!resting) {
+      const jitter = valueNoise2D(time * 0.05 + seed * 13.7, 5.3) - 0.5;
+      const anchorX =
+        width * (0.5 + 0.36 * Math.sin(time * 0.0648 + seed * 11) + 0.06 * jitter);
+      const anchorY =
+        height * (0.5 + 0.36 * Math.sin(time * 0.103 + seed * 23) + 0.06 * jitter);
+      const toAnchorX = anchorX - headX;
+      const toAnchorY = anchorY - headY;
+      const anchorDistance = Math.hypot(toAnchorX, toAnchorY);
+      if (anchorDistance > shortSide * 0.15) {
+        const toAnchor = Math.atan2(toAnchorY, toAnchorX);
+        const longing = clamp((anchorDistance / shortSide - 0.15) * 1.6);
+        turn += angleDelta(creature.heading, toAnchor) * longing * 1.5;
+      }
     }
 
     // Soft walls steer it back toward open ground.
@@ -96,28 +159,8 @@ export const wandererSystem: SimulationSystem = {
       turn += angleDelta(creature.heading, toOpen) * clamp(wallUrgency) * 3.2;
     }
 
-    // The pointer is a predator: inside the fright radius the creature
-    // turns away and bolts. This is the only thing the pointer touches.
-    const pointer = state.pointer;
-    if (pointer.isInside && pointer.influence > 0.03) {
-      const awayX = headX - pointer.position.x;
-      const awayY = headY - pointer.position.y;
-      const distance = Math.hypot(awayX, awayY);
-      const frightRadius = settings.pointerRepelRadiusRatio * shortSide;
-      if (distance < frightRadius && distance > 0.001) {
-        const fright =
-          (1 - distance / frightRadius) ** 2 * pointer.influence;
-        const escape = Math.atan2(awayY, awayX);
-        turn += angleDelta(creature.heading, escape) *
-          clamp(fright * settings.pointerRepelTurnRate, 0, 6) *
-          deltaSeconds *
-          60;
-        targetSpeed *= 1 + settings.pointerSpeedBoost * fright;
-      }
-    }
-
     const maximumTurn =
-      settings.maximumTurnRate * (1 + (targetSpeed > settings.baseSpeedRatio * shortSide ? 1 : 0));
+      settings.maximumTurnRate * (1 + (targetSpeed > baseSpeed ? 1 : 0));
     creature.heading += clamp(turn, -maximumTurn, maximumTurn) * deltaSeconds;
     creature.speed += (targetSpeed - creature.speed) * clamp(3.5 * deltaSeconds);
 
@@ -125,6 +168,16 @@ export const wandererSystem: SimulationSystem = {
     headY += Math.sin(creature.heading) * creature.speed * deltaSeconds;
     headX = clamp(headX, 2, width - 2);
     headY = clamp(headY, 2, height - 2);
+
+    // Body length is a mood: fear stretches it, rest draws it back in.
+    const targetLength = Math.max(
+      8,
+      Math.round(
+        settings.trailCount *
+          (1 - (1 - REST_LENGTH_FACTOR) * creature.restPool) *
+          (1 + FLEE_LENGTH_BOOST * creature.fear),
+      ),
+    );
 
     // Lay body samples at fixed spacing; slow travel widens the stroke.
     const spacing = Math.max(1, settings.segmentSpacingRatio * shortSide);
@@ -135,27 +188,51 @@ export const wandererSystem: SimulationSystem = {
     if (creature.distanceSinceSample >= spacing) {
       creature.distanceSinceSample = 0;
       const slowness = clamp(
-        1.3 - creature.speed / (settings.baseSpeedRatio * shortSide * 1.25),
+        1.3 - creature.speed / (baseSpeed * 1.25),
         0.4,
         1,
       );
       creature.points.push({ x: headX, y: headY, widthFactor: slowness });
-      while (creature.points.length > settings.trailCount) creature.points.shift();
+      while (creature.points.length > targetLength) creature.points.shift();
+    }
+    // Visible retraction: while too long (resting), the tail is drawn
+    // in steadily even though no new samples arrive.
+    if (creature.points.length > targetLength) {
+      creature.retractTimer += deltaSeconds;
+      if (creature.retractTimer >= 0.12) {
+        creature.retractTimer = 0;
+        creature.points.shift();
+      }
+    } else {
+      creature.retractTimer = 0;
     }
 
-    // The head presses a travelling dent into the sheet.
+    // A narrow deep groove under the last stretch of body, with wide
+    // soft shoulders - the line sits in the valley it made, instead of
+    // riding on crystal shards. Resting presses the drop deeper.
     if (settings.carveStrength > 0) {
-      const carveRadius = Math.max(1, settings.carveRadiusRatio * shortSide);
-      const carveRadiusSquared = carveRadius * carveRadius * 9;
+      const count = creature.points.length;
+      const grooveRadius = Math.max(1, settings.carveRadiusRatio * shortSide * 0.55);
+      const shoulderRadius = grooveRadius * 2.6;
+      const rejectSquared = shoulderRadius * shoulderRadius * 9;
+      const strength = settings.carveStrength * (1 + creature.restPool * 1.2);
       for (const node of state.topology.nodes) {
         if (node.pinned) continue;
-        const dx = node.position.x - headX;
-        const dy = node.position.y - headY;
-        const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared > carveRadiusSquared) continue;
-        node.force.z -=
-          settings.carveStrength *
-          Math.exp(-distanceSquared / (carveRadius * carveRadius));
+        let press = 0;
+        for (let back = 0; back < 28 && back < count; back += 4) {
+          const point = creature.points[count - 1 - back]!;
+          const dx = node.position.x - point.x;
+          const dy = node.position.y - point.y;
+          const distanceSquared = dx * dx + dy * dy;
+          if (distanceSquared > rejectSquared) continue;
+          const groove = Math.exp(-distanceSquared / (grooveRadius * grooveRadius));
+          const shoulder = Math.exp(
+            -distanceSquared / (shoulderRadius * shoulderRadius),
+          );
+          const local = groove * 0.85 + shoulder * 0.3;
+          if (local > press) press = local;
+        }
+        if (press > 0.01) node.force.z -= strength * press;
       }
     }
   },

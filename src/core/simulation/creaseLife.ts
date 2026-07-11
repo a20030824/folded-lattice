@@ -18,6 +18,7 @@ import {
 
 interface LifeScratch {
   random: () => number;
+  lastPointerSeenAt: number;
   pressHeld: number;
   pressFired: boolean;
   lastPointerX: number;
@@ -208,10 +209,21 @@ export const creaseLifeSystem: SimulationSystem = {
         spawnInCalmNext: false,
         recomputeTimer: 0,
         dirty: false,
+        lastPointerSeenAt: 0,
       };
       scratchByState.set(state, scratch);
     }
     const elapsed = state.time.elapsed;
+
+    // Unwatched paper lives a little faster: after a while without a
+    // pointer, upcoming events are pulled closer instead of rescheduled.
+    if (state.pointer.isInside) scratch.lastPointerSeenAt = elapsed;
+    const idleBoost = life.idleRateBoost ?? 1;
+    if (idleBoost > 1 && elapsed - scratch.lastPointerSeenAt > 45) {
+      const pull = (idleBoost - 1) * deltaSeconds;
+      if (scratch.nextSpawnAt > 0) scratch.nextSpawnAt -= pull;
+      if (scratch.nextMajorAt > 0) scratch.nextMajorAt -= pull;
+    }
 
     // 1. Ageing: growth advances, fresh folds narrow as they set, healing
     // folds lose strength.
@@ -304,14 +316,28 @@ export const creaseLifeSystem: SimulationSystem = {
       if (elapsed >= scratch.nextMajorAt) {
         scratch.nextMajorAt =
           elapsed + life.majorIntervalSeconds * (0.7 + scratch.random() * 0.6);
-        const stableMajors = field.creases.filter(
-          (crease) => crease.kind === "major" && crease.fadePerSecond === 0,
+        const allMajors = field.creases.filter(
+          (crease) => crease.kind === "major",
         );
-        if (stableMajors.length > 0) {
+        const stableMajors = allMajors.filter(
+          (crease) => crease.fadePerSecond === 0,
+        );
+        // The skeleton count itself drifts: a handover sometimes only
+        // retires, sometimes only grows, mostly swaps.
+        const minimumMajors = life.minimumMajorCount ?? settings.majorCount;
+        const maximumMajors = life.maximumMajorCount ?? settings.majorCount;
+        const roll = scratch.random();
+        const retireOnly =
+          roll < 0.22 && allMajors.length > minimumMajors && stableMajors.length > 0;
+        const growOnly =
+          !retireOnly && roll < 0.44 && allMajors.length < maximumMajors;
+
+        if (!growOnly && stableMajors.length > 0) {
           const retiring =
             stableMajors[Math.floor(scratch.random() * stableMajors.length)]!;
           retiring.fadePerSecond = retiring.strength / 45;
-
+        }
+        if (!retireOnly && (stableMajors.length > 0 || allMajors.length < maximumMajors)) {
           const diagonal = Math.hypot(state.viewport.width, state.viewport.height);
           spawnFold(state, scratch, {
             originX: state.viewport.width * (0.25 + scratch.random() * 0.5),

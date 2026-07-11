@@ -161,6 +161,25 @@ export interface CreatureState {
   heading: number;
   speed: number;
   distanceSinceSample: number;
+  /**
+   * Lingering fright, 0..1. Spikes when the pointer gets close and
+   * decays over seconds - the creature does not calm down the moment
+   * the hand leaves.
+   */
+  fear: number;
+  /**
+   * How settled the current rest is, 0..1. Grows while resting; the
+   * head pools into a drop of ink and the press deepens with it.
+   */
+  restPool: number;
+  /**
+   * Which way the body curls when it rests; picked per rest episode.
+   */
+  restSign: 1 | -1;
+  /**
+   * Timer that paces the visible tail retraction while shrinking.
+   */
+  retractTimer: number;
 }
 
 export interface TopologyState {

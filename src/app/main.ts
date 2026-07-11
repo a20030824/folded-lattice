@@ -23,7 +23,8 @@ const getViewport = (): Viewport => ({
   devicePixelRatio: window.devicePixelRatio || 1,
 });
 
-const presetName = new URLSearchParams(window.location.search).get("preset");
+const urlParameters = new URLSearchParams(window.location.search);
+const presetName = urlParameters.get("preset");
 const preset =
   presetName === "paper"
     ? crumpledPaperPreset
@@ -32,6 +33,26 @@ const preset =
       : presetName === "membrane"
         ? breathingMembranePreset
         : wanderingInkPreset;
+
+// Authored personalities for the wandering ink: same rules, different
+// bodies. ?mode=serpent (long, slow, thin) or ?mode=hatchling (short,
+// quick, skittish); the default is the loner.
+const mode = urlParameters.get("mode");
+if (preset === wanderingInkPreset && preset.config.creature) {
+  const creature = preset.config.creature;
+  if (mode === "serpent") {
+    creature.trailCount = 340;
+    creature.baseSpeedRatio = 0.068;
+    creature.inkWidthRatio = 0.0042;
+    creature.wanderStrength = 1.3;
+  } else if (mode === "hatchling") {
+    creature.trailCount = 70;
+    creature.baseSpeedRatio = 0.125;
+    creature.inkWidthRatio = 0.0062;
+    creature.pointerRepelRadiusRatio = 0.3;
+    creature.pointerSpeedBoost = 1.6;
+  }
+}
 function createRendererFor(presetId: string): ReturnType<typeof createCanvasRenderer> {
   if (presetId === "tide-archive") return createContourRenderer(canvas!);
   if (presetId === "wandering-ink") return createInkRenderer(canvas!);

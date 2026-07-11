@@ -143,6 +143,7 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
   let palette: Palette | null = null;
   const backdrop = document.createElement("canvas");
   let backdropKey = "";
+  let shadeScratch = new Float32Array(0);
 
   return {
     resize(nextViewport, maximumDevicePixelRatio) {
@@ -200,6 +201,9 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       // Lambert of the flat sheet; deviation from it is what we shade.
       const restLambert = lz;
 
+      if (shadeScratch.length !== triangles.length) {
+        shadeScratch = new Float32Array(triangles.length);
+      }
       for (const triangle of triangles) {
         const lambert =
           triangle.normal.x * lx +
@@ -215,7 +219,7 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
         );
         const borderLinear = clamp(borderDistance / 90);
         const borderFade = borderLinear * borderLinear;
-        const shadeValue =
+        shadeScratch[triangle.id] =
           0.5 +
           (clamp(
             0.5 +
@@ -225,6 +229,21 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           ) -
             0.5) *
             borderFade;
+      }
+
+      for (const triangle of triangles) {
+        // Blend with the neighbouring facets: the relief reads as one
+        // pressed surface instead of separate crystal shards.
+        let shadeValue = shadeScratch[triangle.id]!;
+        const neighbors = triangle.neighborIndices;
+        if (neighbors.length > 0) {
+          let neighborSum = 0;
+          for (const neighborIndex of neighbors) {
+            neighborSum += shadeScratch[neighborIndex] ?? 0.5;
+          }
+          shadeValue =
+            shadeValue * 0.52 + (neighborSum / neighbors.length) * 0.48;
+        }
         if (Math.abs(shadeValue - 0.5) < 0.015) continue;
         const a = nodes[triangle.nodeA];
         const b = nodes[triangle.nodeB];
@@ -284,6 +303,21 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           context.moveTo(from.x, from.y);
           context.lineTo(to.x, to.y);
           context.stroke();
+        }
+
+        // A resting head pools into a drop of ink.
+        if (creature.restPool > 0.05) {
+          const headPoint = points[count - 1]!;
+          context.fillStyle = palette.ink[INK_LUT_STEPS - 1]!;
+          context.beginPath();
+          context.arc(
+            headPoint.x,
+            headPoint.y,
+            maximumWidth * (0.7 + 1.6 * creature.restPool),
+            0,
+            Math.PI * 2,
+          );
+          context.fill();
         }
       }
 
