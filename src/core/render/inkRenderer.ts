@@ -175,6 +175,51 @@ function paintBackdrop(
   }
 }
 
+interface SmoothStrokePoint {
+  x: number;
+  y: number;
+  widthFactor: number;
+}
+
+function smoothStrokePoints(
+  source: readonly SmoothStrokePoint[],
+  iterations = 2,
+): SmoothStrokePoint[] {
+  if (source.length < 3) return [...source];
+
+  let result = [...source];
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    const next: SmoothStrokePoint[] = [result[0]!];
+
+    for (let index = 0; index < result.length - 1; index += 1) {
+      const a = result[index]!;
+      const b = result[index + 1]!;
+
+      next.push({
+        x: a.x * 0.75 + b.x * 0.25,
+        y: a.y * 0.75 + b.y * 0.25,
+        widthFactor:
+          a.widthFactor * 0.75 +
+          b.widthFactor * 0.25,
+      });
+
+      next.push({
+        x: a.x * 0.25 + b.x * 0.75,
+        y: a.y * 0.25 + b.y * 0.75,
+        widthFactor:
+          a.widthFactor * 0.25 +
+          b.widthFactor * 0.75,
+      });
+    }
+
+    next.push(result[result.length - 1]!);
+    result = next;
+  }
+
+  return result;
+}
+
 /**
  * Light-paper renderer for the wandering-ink preset. The mesh is never
  * drawn as lines or points: flat terrain is indistinguishable from the
@@ -192,6 +237,9 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
   let shadeScratch = new Float32Array(0);
   const relief = document.createElement("canvas");
   const reliefContext = relief.getContext("2d")!;
+  const tailSurface = document.createElement("canvas");
+  const tailContext = tailSurface.getContext("2d")!;
+  let renderPixelRatio = 1;
   const fibreLayers = FIBER_LAYERS.map((settings) => {
     const surface = document.createElement("canvas");
     return { ...settings, surface, context: surface.getContext("2d")! };
@@ -204,10 +252,32 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
         Math.max(1, nextViewport.devicePixelRatio),
         maximumDevicePixelRatio,
       );
+      renderPixelRatio = pixelRatio;
       canvas.width = Math.max(1, Math.round(nextViewport.width * pixelRatio));
       canvas.height = Math.max(1, Math.round(nextViewport.height * pixelRatio));
       canvas.style.width = `${nextViewport.width}px`;
       canvas.style.height = `${nextViewport.height}px`;
+      tailSurface.width = canvas.width;
+      tailSurface.height = canvas.height;
+
+      tailContext.setTransform(
+        renderPixelRatio,
+        0,
+        0,
+        renderPixelRatio,
+        0,
+        0,
+      );
+
+      // 原本主畫布的設定
+      context.setTransform(
+        pixelRatio,
+        0,
+        0,
+        pixelRatio,
+        0,
+        0,
+      );
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.lineCap = "round";
       context.lineJoin = "round";
@@ -413,172 +483,188 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       }
       context.globalAlpha = 1;
       // The creature: one continuous brush stroke, tail melting into
-      // the paper, width recorded from its pace when each point was laid.
+// the paper, width recorded from its pace when each point was laid.
+const creatureConfig = config.creature;
 
-      const creatureConfig = config.creature;
+if (creature && creatureConfig && creature.points.length > 1) {
+  const shortSide = Math.max(
+    1,
+    Math.min(viewport.width, viewport.height),
+  );
 
-      if (creature && creatureConfig && creature.points.length > 1) {
-        const shortSide = Math.max(
-          1,
-          Math.min(viewport.width, viewport.height),
-        );
+  const maximumWidth =
+    creatureConfig.inkWidthRatio * shortSide;
 
-        const maximumWidth =
-          creatureConfig.inkWidthRatio * shortSide;
+  const points = creature.points;
+  const count = points.length;
 
-        const points = creature.points;
-        const count = points.length;
+  const tailEndIndex = Math.min(
+    count - 1,
+    Math.max(
+      1,
+      Math.floor((count - 1) * 0.25),
+    ),
+  );
 
-        // 前 25% 是逐漸透明的尾巴
-        const tailEndIndex = Math.min(
-          count - 1,
-          Math.max(
-            1,
-            Math.floor((count - 1) * 0.25),
-          ),
-        );
+  /*
+   * 先把尾巴以完整墨色畫到獨立透明 Canvas。
+   * 每段可以保有自己的寬度，但透明度還不在這裡處理。
+   */
+  tailContext.setTransform(
+    renderPixelRatio,
+    0,
+    0,
+    renderPixelRatio,
+    0,
+    0,
+  );
 
-        const tailStart = points[0]!;
-        const tailEnd = points[tailEndIndex]!;
-        const inkColor = parseColor(
-          config.render.colors.ink ?? "#34425c",
-        );
+  tailContext.clearRect(
+    0,
+    0,
+    viewport.width,
+    viewport.height,
+  );
 
-        // 透明尾巴的漸層
-        const tailGradient = context.createLinearGradient(
-          tailStart.x,
-          tailStart.y,
-          tailEnd.x,
-          tailEnd.y,
-        );
+  tailContext.globalAlpha = 1;
+  tailContext.globalCompositeOperation = "source-over";
+  tailContext.strokeStyle = palette.inkSolid;
+  tailContext.lineCap = "round";
+  tailContext.lineJoin = "round";
 
-        tailGradient.addColorStop(
-          0,
-          `rgba(${inkColor.r | 0}, ${inkColor.g | 0}, ${inkColor.b | 0}, 0)`,
-        );
+  for (
+    let index = 1;
+    index <= tailEndIndex;
+    index += 1
+  ) {
+    const from = points[index - 1]!;
+    const to = points[index]!;
 
-        tailGradient.addColorStop(
-          1,
-          `rgba(${inkColor.r | 0}, ${inkColor.g | 0}, ${inkColor.b | 0}, 1)`,
-        );
+    // 0 = 最尾端，1 = 接上身體
+    const tailProgress =
+      index / tailEndIndex;
 
-        // 一次畫完整條尾巴，避免每節變成虛線
-        // 用左右邊界組成一條逐漸變粗的帶狀尾巴
-        const leftSide: Array<{ x: number; y: number }> = [];
-        const rightSide: Array<{ x: number; y: number }> = [];
+    // 平滑地由細變粗
+    const tailWidthTaper =
+      tailProgress *
+      tailProgress *
+      (3 - 2 * tailProgress);
 
-        for (let index = 0; index <= tailEndIndex; index += 1) {
-          const point = points[index]!;
-          const previous = points[Math.max(0, index - 1)]!;
-          const next = points[Math.min(tailEndIndex, index + 1)]!;
+    const bodyArc =
+      index / (count - 1);
 
-          // 算出身體前進方向
-          const directionX = next.x - previous.x;
-          const directionY = next.y - previous.y;
-          const directionLength =
-            Math.hypot(directionX, directionY) || 1;
+    // 保留原本頭部收尖的規則
+    const headTaper =
+      0.55 +
+      0.45 *
+        clamp((1 - bodyArc) / 0.045);
 
-          // 與前進方向垂直的方向
-          const normalX = -directionY / directionLength;
-          const normalY = directionX / directionLength;
+    tailContext.lineWidth = Math.max(
+      0.4,
+      maximumWidth *
+        to.widthFactor *
+        tailWidthTaper *
+        headTaper,
+    );
 
-          // 0 = 尾端，1 = 接到正常身體的位置
-          const tailArc =
-            tailEndIndex > 0 ? index / tailEndIndex : 1;
+    tailContext.beginPath();
+    tailContext.moveTo(from.x, from.y);
+    tailContext.lineTo(to.x, to.y);
+    tailContext.stroke();
+  }
 
-          // 平滑地從 0 增加到 1
-          const tailTaper =
-            tailArc * tailArc * (3 - 2 * tailArc);
+  /*
+   * 尾巴現在已經是一個完整形狀。
+   * 接著用 destination-in 一次裁出透明漸層。
+   */
+  const tailStart = points[0]!;
+  const tailEnd = points[tailEndIndex]!;
 
-          // 使用正常身體原本的粗細公式
-          const bodyArc = index / (count - 1);
+  const alphaGradient =
+    tailContext.createLinearGradient(
+      tailStart.x,
+      tailStart.y,
+      tailEnd.x,
+      tailEnd.y,
+    );
 
-          const bodyTaper =
-            clamp(bodyArc / 0.06) *
-            (
-              0.55 +
-              0.45 * clamp((1 - bodyArc) / 0.045)
-            );
+  alphaGradient.addColorStop(
+    0,
+    "rgba(0, 0, 0, 0)",
+  );
 
-          const width = Math.max(
-            0,
-            maximumWidth *
-              point.widthFactor *
-              bodyTaper *
-              tailTaper,
-          );
+  alphaGradient.addColorStop(
+    1,
+    "rgba(0, 0, 0, 1)",
+  );
 
-          const halfWidth = width * 0.5;
+  tailContext.globalCompositeOperation =
+    "destination-in";
 
-          leftSide.push({
-            x: point.x + normalX * halfWidth,
-            y: point.y + normalY * halfWidth,
-          });
+  tailContext.fillStyle = alphaGradient;
 
-          rightSide.push({
-            x: point.x - normalX * halfWidth,
-            y: point.y - normalY * halfWidth,
-          });
-        }
+  tailContext.fillRect(
+    0,
+    0,
+    viewport.width,
+    viewport.height,
+  );
 
-        // 尾巴是一整個連續面，不再是一節一節的 stroke
-        context.globalAlpha = 1;
-        context.fillStyle = tailGradient;
+  tailContext.globalCompositeOperation =
+    "source-over";
 
-        context.beginPath();
+  // 把處理完成的透明尾巴畫回主畫面
+  context.globalAlpha = 1;
 
-        const firstLeft = leftSide[0]!;
-        context.moveTo(firstLeft.x, firstLeft.y);
+  context.drawImage(
+    tailSurface,
+    0,
+    0,
+    viewport.width,
+    viewport.height,
+  );
 
-        for (let index = 1; index < leftSide.length; index += 1) {
-          const point = leftSide[index]!;
-          context.lineTo(point.x, point.y);
-        }
+  /*
+   * 接著畫正常身體。
+   * 繼續直接使用原始 points 和 widthFactor。
+   */
+  context.globalAlpha = 1;
+  context.strokeStyle = palette.inkSolid;
+  context.lineCap = "round";
+  context.lineJoin = "round";
 
-        for (let index = rightSide.length - 1; index >= 0; index -= 1) {
-          const point = rightSide[index]!;
-          context.lineTo(point.x, point.y);
-        }
+  for (
+    let index = tailEndIndex + 1;
+    index < count;
+    index += 1
+  ) {
+    const from = points[index - 1]!;
+    const to = points[index]!;
+    const arc = index / (count - 1);
 
-        context.closePath();
-        context.fill();
+    const taper =
+      clamp(arc / 0.06) *
+      (
+        0.55 +
+        0.45 *
+          clamp((1 - arc) / 0.045)
+      );
 
-        // 畫尾巴後面的正常身體
-        context.globalAlpha = 1;
-        context.strokeStyle = palette.inkSolid;
+    context.lineWidth = Math.max(
+      0.4,
+      maximumWidth *
+        to.widthFactor *
+        taper,
+    );
 
-        for (
-          let index = tailEndIndex + 1;
-          index < count;
-          index += 1
-        ) {
-          const from = points[index - 1]!;
-          const to = points[index]!;
-          const arc = index / (count - 1);
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+  }
 
-          const taper =
-            clamp(arc / 0.06) *
-            (
-              0.55 +
-              0.45 * clamp((1 - arc) / 0.045)
-            );
-
-          context.lineWidth = Math.max(
-            0.4,
-            maximumWidth * to.widthFactor * taper,
-          );
-
-          context.beginPath();
-          context.moveTo(from.x, from.y);
-          context.lineTo(to.x, to.y);
-          context.stroke();
-        }
-
-        context.globalAlpha = 1;
-
-        // No extra object at rest: the "puddle" is the line itself,
-        // laid down thick while it winds into a coil.
-      }
+  context.globalAlpha = 1;
+}
 
       context.globalAlpha = 1;
     },
@@ -588,6 +674,8 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       canvas.height = 1;
       relief.width = 1;
       relief.height = 1;
+      tailSurface.width = 1;
+      tailSurface.height = 1;
       for (const layer of fibreLayers) {
         layer.surface.width = 1;
         layer.surface.height = 1;
