@@ -24,11 +24,15 @@ const config: FoldedLatticeConfig = {
     springStrength: 8,
     planarSpringStrength: 0.55,
     verticalSpringStrength: 1,
-    damping: 4.2,
+    // Loosened so disturbances ring outward as travelling waves; the
+    // taut-membrane term below is inherited from the water experiment
+    // (judge's call: the wave language belongs to the membrane).
+    damping: 2.6,
     restPoseStrength: 0.35,
     maximumDepthRatio: 0.065,
     maximumVelocity: 280,
     solverIterations: 1,
+    transverseSpringStrength: 1.2,
   },
   fields: {
     pressure: {

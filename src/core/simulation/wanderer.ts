@@ -1,4 +1,4 @@
-import type { SimulationSystem } from "../contracts";
+﻿import type { SimulationSystem } from "../contracts";
 import { clamp, valueNoise2D } from "../math";
 import type { CreatureState, SimulationState } from "../state";
 
@@ -26,11 +26,6 @@ const REST_TURN_RATE = 1.5;
  * they are laid, so only the coiled part of the body is heavy.
  */
 const REST_GIRTH_BOOST = 1.3;
-/**
- * Vertical speed (px/s) in the sense ring above which a passing wave
- * registers; calibrated above the creature's own wake noise.
- */
-const SURGE_THRESHOLD = 25;
 
 /**
  * Shortest signed angle from `from` to `to`.
@@ -41,33 +36,6 @@ function angleDelta(from: number, to: number): number {
   if (delta < -Math.PI) delta += Math.PI * 2;
   return delta;
 }
-
-interface WaterScratch {
-  /**
-   * Edge detector for the pointer press: a NEW press is a stone
-   * dropped into the water, a hard push lasting a few frames so the
-   * ring actually carries.
-   */
-  pointerWasDown: boolean;
-  /**
-   * Seconds left of the initial stone impact, and where it landed.
-   * The impact finishes even if the press was a momentary tap.
-   */
-  dropTimer: number;
-  dropX: number;
-  dropY: number;
-  /**
-   * Paces the soft breathing rings a resting coil sends out.
-   */
-  breathTimer: number;
-  /**
-   * Paces the swim strokes; each beat is a one-frame kick, because a
-   * taut surface swallows anything slower without a trace.
-   */
-  strokeTimer: number;
-}
-
-const waterScratch = new WeakMap<SimulationState, WaterScratch>();
 
 function createCreature(state: SimulationState, seed: number): CreatureState {
   const hash = Math.abs(Math.sin(seed * 12.9898) * 43758.5453) % 1;
@@ -141,51 +109,6 @@ export const wandererSystem: SimulationSystem = {
     }
     creature.fear *= Math.exp(-FEAR_DECAY_PER_SECOND * deltaSeconds);
     if (creature.fear < 0.002) creature.fear = 0;
-
-    // Waves are information. A swell arriving at the head startles
-    // the creature - a tossed stone speaks to it through the water.
-    // It senses in a ring beyond its own bow wake, so it never
-    // frightens itself.
-    {
-      const senseInner = shortSide * 0.075;
-      const senseOuter = shortSide * 0.16;
-      const innerSquared = senseInner * senseInner;
-      const outerSquared = senseOuter * senseOuter;
-      let surge = 0;
-      let motionSum = 0;
-      let gradientX = 0;
-      let gradientY = 0;
-      for (const node of state.topology.nodes) {
-        if (node.pinned) continue;
-        const dx = node.position.x - headX;
-        const dy = node.position.y - headY;
-        const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared < innerSquared || distanceSquared > outerSquared) {
-          continue;
-        }
-        // A passing wavefront is read from vertical MOTION, which is
-        // far stronger than its height.
-        const motion = Math.abs(node.velocity.z);
-        if (motion > surge) surge = motion;
-        motionSum += motion;
-        gradientX += dx * motion;
-        gradientY += dy * motion;
-      }
-      // Direction discrimination: the creature's own paddle rings
-      // arrive on all sides of the ring at once (isotropic), while a
-      // stranger's wave washes in from ONE side. Only a lopsided
-      // surge reads as a caller.
-      const meanRadius = (senseInner + senseOuter) * 0.5;
-      const gradientLength = Math.hypot(gradientX, gradientY);
-      const anisotropy =
-        motionSum > 0.001 ? gradientLength / (motionSum * meanRadius) : 0;
-      if (surge > SURGE_THRESHOLD && anisotropy > 0.45) {
-        const startle = clamp((surge - SURGE_THRESHOLD) / 60);
-        creature.fear = Math.max(creature.fear, startle * 0.55);
-        const away = Math.atan2(-gradientY, -gradientX);
-        escapeTurn += angleDelta(creature.heading, away) * startle * 2.5;
-      }
-    }
 
     // Pace breathes on slow noise: it lingers, then lopes. A lull can
     // become a real rest - and rest is a committed episode, not a
@@ -330,115 +253,59 @@ export const wandererSystem: SimulationSystem = {
       creature.retractTimer = 0;
     }
 
-    // Water, not ground. Three ways the surface is disturbed, all
-    // vertical - water is displaced, never gathered:
-    //  - the swimming head presses a moving dimple that sheds a wake,
-    //    harder when it hurries or panics
-    //  - a resting coil breathes: a soft ring pulses out periodically
-    //  - a NEW pointer press is a dropped stone, one sharp impulse
-    let scratch = waterScratch.get(state);
-    if (!scratch) {
-      scratch = {
-        pointerWasDown: false,
-        dropTimer: 0,
-        dropX: 0,
-        dropY: 0,
-        breathTimer: 0,
-        strokeTimer: 0,
-      };
-      waterScratch.set(state, scratch);
-    }
+    // The ground interaction: the body does not just stamp depth, it
+    // DISPLACES the sheet. Nodes under the line are pressed down and
+    // pushed sideways off the path; the spring weave piles the pushed
+    // material into a rim on its own, and the fine mesh wrinkles
+    // around the groove instead of shading a prescribed profile.
+    // Resting presses the nest deeper.
     if (settings.carveStrength > 0) {
-      const pressRadius = Math.max(
-        1,
-        settings.carveRadiusRatio * shortSide * 0.5,
-      );
-      const pressSquared = pressRadius * pressRadius;
-      const speedFactor = creature.speed / Math.max(1, baseSpeed);
-      // A taut surface holds no static dent and swallows slow pushes -
-      // only impulse writes on water. So the swimmer paddles in BEATS:
-      // each stroke is a one-frame kick that sheds a small ring, and
-      // the trail behind it is a string of widening arcs. The beat
-      // quickens with pace and hits harder in fright.
-      let pressStrength = 0;
-      if (!resting) {
-        scratch.strokeTimer += deltaSeconds * (0.9 + 1.3 * speedFactor);
-        if (scratch.strokeTimer >= 1) {
-          scratch.strokeTimer = 0;
-          pressStrength =
-            settings.carveStrength *
-            (75 + 35 * speedFactor) *
-            (1 + creature.fear * 1.2);
-        }
-      }
-
-      let breathStrength = 0;
-      if (resting) {
-        scratch.breathTimer += deltaSeconds;
-        if (scratch.breathTimer >= 1.7) {
-          scratch.breathTimer = 0;
-          breathStrength = settings.carveStrength * 90;
-        }
-      } else {
-        scratch.breathTimer = 0;
-      }
-      const breathRadius = pressRadius * 1.5;
-      const breathSquared = breathRadius * breathRadius;
-
-      // A held finger stirs the water; the first instant of a press
-      // hits like a stone so a ring carries outward. Dragging while
-      // held ploughs a moving furrow of waves.
-      const pointerDown = pointer.isDown && pointer.isInside;
-      if (pointerDown && !scratch.pointerWasDown) {
-        scratch.dropTimer = 0.15;
-        scratch.dropX = pointer.position.x;
-        scratch.dropY = pointer.position.y;
-      }
-      scratch.pointerWasDown = pointerDown;
-      // The stone finishes its splash even on a momentary tap; a held
-      // finger keeps stirring at the current position.
-      let dropStrength = 0;
-      if (scratch.dropTimer > 0) {
-        scratch.dropTimer -= deltaSeconds;
-        dropStrength = settings.carveStrength * 120;
-      }
-      const stirStrength = pointerDown ? settings.carveStrength * 10 : 0;
-      const dropRadius = shortSide * 0.04;
-      const dropSquared = dropRadius * dropRadius;
-
-      // Every disturbance is volume-neutral (a "mexican hat": water
-      // pushed down at the center rises in a skirt around it). Purely
-      // downward sources would leave a DC deficit that lingers for
-      // many seconds as pool-wide mottling.
-      const hat = (d2: number, r2: number) =>
-        Math.exp(-d2 / r2) - 0.25 * Math.exp(-d2 / (4 * r2));
-      const strokeSum = pressStrength + breathStrength;
+      const count = creature.points.length;
+      const grooveRadius = Math.max(1, settings.carveRadiusRatio * shortSide * 0.55);
+      const shoulderRadius = grooveRadius * 2.4;
+      const rejectSquared = shoulderRadius * shoulderRadius * 9;
+      // Rest presses only gently harder: the nest should read as a
+      // soft dimple under the coil, not a starburst pucker.
+      const strength = settings.carveStrength * (1 + creature.restPool * 0.5);
       for (const node of state.topology.nodes) {
         if (node.pinned) continue;
-        if (strokeSum > 0) {
-          const dx = node.position.x - headX;
-          const dy = node.position.y - headY;
+        let down = 0;
+        let ridge = 0;
+        let nearestSquared = Infinity;
+        let nearestDx = 0;
+        let nearestDy = 0;
+        for (let back = 0; back < 28 && back < count; back += 4) {
+          const point = creature.points[count - 1 - back]!;
+          const dx = node.position.x - point.x;
+          const dy = node.position.y - point.y;
           const distanceSquared = dx * dx + dy * dy;
-          const radiusSquared =
-            breathStrength > 0 ? breathSquared : pressSquared;
-          if (distanceSquared <= radiusSquared * 12) {
-            node.force.z -= strokeSum * hat(distanceSquared, radiusSquared);
+          if (distanceSquared > rejectSquared) continue;
+          if (distanceSquared < nearestSquared) {
+            nearestSquared = distanceSquared;
+            nearestDx = dx;
+            nearestDy = dy;
           }
+          const groove = Math.exp(-distanceSquared / (grooveRadius * grooveRadius));
+          const shoulder = Math.exp(
+            -distanceSquared / (shoulderRadius * shoulderRadius),
+          );
+          if (groove > down) down = groove;
+          const rim = shoulder - groove * 1.2;
+          if (rim > ridge) ridge = rim;
         }
-        if (dropStrength > 0) {
-          const px = node.position.x - scratch.dropX;
-          const py = node.position.y - scratch.dropY;
-          const impactSquared = px * px + py * py;
-          if (impactSquared <= dropSquared * 12) {
-            node.force.z -= dropStrength * hat(impactSquared, dropSquared);
-          }
-        }
-        if (stirStrength > 0) {
-          const sx = node.position.x - pointer.position.x;
-          const sy = node.position.y - pointer.position.y;
-          const stirSquared = sx * sx + sy * sy;
-          if (stirSquared <= dropSquared * 12) {
-            node.force.z -= stirStrength * hat(stirSquared, dropSquared);
+        if (down > 0.01 || ridge > 0.01) {
+          node.force.z -= strength * (down - ridge * 0.4);
+          // The line GATHERS the sheet like a thread pulled through
+          // cloth: wall nodes are drawn toward the path, and the weave
+          // puckers into a seam along it. Peaks on the groove wall
+          // (down = 0.5), vanishing at the center where the direction
+          // is undefined.
+          const nearestDistance = Math.sqrt(nearestSquared);
+          if (nearestDistance > 0.5) {
+            const gather =
+              strength * 0.45 * down * (1 - down) * 4;
+            node.force.x -= (nearestDx / nearestDistance) * gather;
+            node.force.y -= (nearestDy / nearestDistance) * gather;
           }
         }
       }
