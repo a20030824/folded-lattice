@@ -10,6 +10,39 @@ import type { Viewport } from "../types";
 const RELIEF_SCALE = 1 / 3;
 const RELIEF_BLUR_PX = 5;
 
+/**
+ * Wick time is represented by concentration: fresh ink still has a
+ * direction, while drying ink has spread into the paper.  Each tier is
+ * rasterized below display resolution and composited once, so fibres melt
+ * together instead of every edge receiving its own fuzzy halo.
+ */
+const FIBER_LAYERS = [
+  {
+    minimumLevel: 0.15,
+    scale: 0.72,
+    blur: 0.35,
+    width: 0.85,
+    alphaGain: 0.21,
+    maximumAlpha: 0.15,
+  },
+  {
+    minimumLevel: 0.095,
+    scale: 0.42,
+    blur: 1.15,
+    width: 1.35,
+    alphaGain: 0.4,
+    maximumAlpha: 0.13,
+  },
+  {
+    minimumLevel: 0.06,
+    scale: 0.27,
+    blur: 2.6,
+    width: 2.1,
+    alphaGain: 0.55,
+    maximumAlpha: 0.1,
+  },
+] as const;
+
 const SHADE_LUT_STEPS = 32;
 const INK_LUT_STEPS = 14;
 
@@ -159,6 +192,10 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
   let shadeScratch = new Float32Array(0);
   const relief = document.createElement("canvas");
   const reliefContext = relief.getContext("2d")!;
+  const fibreLayers = FIBER_LAYERS.map((settings) => {
+    const surface = document.createElement("canvas");
+    return { ...settings, surface, context: surface.getContext("2d")! };
+  });
 
   return {
     resize(nextViewport, maximumDevicePixelRatio) {
@@ -288,13 +325,26 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       context.globalAlpha = 1;
 
       // The soaked fibres: ink that left the body wicks outward along
-      // the triangle edges (the paper's fibre structure, straight
-      // from v1's playbook). Near the path the strands are dark and
-      // dense; further out they thin, branch, and dry. The lattice
-      // is only ever visible where ink has touched it.
+      // the triangle edges. Fresh paths retain a little fibre direction;
+      // drying paths are lower-res and blurrier, absorbed back into paper.
+      // The lattice is only ever visible where ink has touched it.
       const edgeInk = state.edgeInk;
       const creature = state.creature;
       if (edgeInk && edgeInk.length === state.topology.edges.length) {
+        for (const layer of fibreLayers) {
+          const width = Math.max(2, Math.round(viewport.width * layer.scale));
+          const height = Math.max(2, Math.round(viewport.height * layer.scale));
+          if (layer.surface.width !== width || layer.surface.height !== height) {
+            layer.surface.width = width;
+            layer.surface.height = height;
+          }
+          layer.context.setTransform(layer.scale, 0, 0, layer.scale, 0, 0);
+          layer.context.clearRect(0, 0, viewport.width, viewport.height);
+          layer.context.strokeStyle = palette.inkSolid;
+          layer.context.lineCap = "round";
+          layer.context.lineJoin = "round";
+          layer.context.lineWidth = layer.width;
+        }
         const edges = state.topology.edges;
         const flickerTime = state.time.elapsed * 0.55;
         const veinShortSide = Math.max(
@@ -309,8 +359,6 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
             : undefined;
         const maskInner = veinShortSide * 0.08;
         const maskOuter = veinShortSide * 0.18;
-        context.strokeStyle = palette.inkSolid;
-        context.lineWidth = 0.7;
         for (let index = 0; index < edges.length; index += 1) {
           const level = edgeInk[index]!;
           if (level < 0.06) continue;
@@ -335,16 +383,32 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
             );
             mask = clamp((headDistance - maskInner) / (maskOuter - maskInner));
           }
+          const layer =
+            level >= FIBER_LAYERS[0].minimumLevel
+              ? fibreLayers[0]!
+              : level >= FIBER_LAYERS[1].minimumLevel
+                ? fibreLayers[1]!
+                : fibreLayers[2]!;
           // True ink that thins to nothing: constant colour, falling
-          // alpha - the strand goes transparent, never grey.
-          const alpha = Math.min(0.2, level * 0.26) * mask;
+          // alpha - the strand goes transparent, never grey. Older,
+          // wider layers receive a little more pigment before diffusion.
+          const alpha =
+            Math.min(layer.maximumAlpha, level * layer.alphaGain) * mask;
           if (alpha < 0.012) continue;
-          context.globalAlpha = alpha;
-          context.beginPath();
-          context.moveTo(a.position.x, a.position.y);
-          context.lineTo(b.position.x, b.position.y);
-          context.stroke();
+          layer.context.globalAlpha = alpha;
+          layer.context.beginPath();
+          layer.context.moveTo(a.position.x, a.position.y);
+          layer.context.lineTo(b.position.x, b.position.y);
+          layer.context.stroke();
         }
+        // Paint old absorption first, then let newer fibres sit on top.
+        for (let index = fibreLayers.length - 1; index >= 0; index -= 1) {
+          const layer = fibreLayers[index]!;
+          context.globalAlpha = 1;
+          context.filter = `blur(${layer.blur}px)`;
+          context.drawImage(layer.surface, 0, 0, viewport.width, viewport.height);
+        }
+        context.filter = "none";
         context.globalAlpha = 1;
       }
 
@@ -395,6 +459,12 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
     dispose() {
       canvas.width = 1;
       canvas.height = 1;
+      relief.width = 1;
+      relief.height = 1;
+      for (const layer of fibreLayers) {
+        layer.surface.width = 1;
+        layer.surface.height = 1;
+      }
     },
   };
 }
