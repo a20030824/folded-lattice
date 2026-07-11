@@ -27,6 +27,11 @@ interface Palette {
    * Tail fade of the creature, paper → ink.
    */
   ink: string[];
+  /**
+   * Full-strength ink for alpha-faded strokes: the colour never
+   * shifts toward paper, only the opacity drops.
+   */
+  inkSolid: string;
 }
 
 function buildPaletteKey(colors: {
@@ -83,6 +88,7 @@ function buildPalette(colors: {
     vignette: rgbString(mixRgb(background, ink, 0.32)),
     shade,
     ink: inkRamp,
+    inkSolid: rgbString(ink),
   };
 }
 
@@ -291,34 +297,55 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       if (edgeInk && edgeInk.length === state.topology.edges.length) {
         const edges = state.topology.edges;
         const flickerTime = state.time.elapsed * 0.55;
+        const veinShortSide = Math.max(
+          1,
+          Math.min(viewport.width, viewport.height),
+        );
+        // Nothing bleeds beside the crisp head (judge's call): veins
+        // are suppressed inside this radius and ramp in beyond it.
+        const headPoint =
+          creature && creature.points.length > 0
+            ? creature.points[creature.points.length - 1]!
+            : undefined;
+        const maskInner = veinShortSide * 0.08;
+        const maskOuter = veinShortSide * 0.18;
+        context.strokeStyle = palette.inkSolid;
         context.lineWidth = 0.7;
         for (let index = 0; index < edges.length; index += 1) {
           const level = edgeInk[index]!;
           if (level < 0.06) continue;
-          // Broken, intermittent strands (judge's call): half the
-          // fibres never conduct visibly, and the rest come and go
-          // in slow fits.
+          // Rare, intermittent strands (judge's call, twice now):
+          // four fibres in five never conduct visibly, and the rest
+          // come and go in slow fits.
           const porosity = hash01(index * 2654435761);
-          if (porosity < 0.48) continue;
+          if (porosity < 0.8) continue;
           const flicker = valueNoise2D(index * 0.83, flickerTime);
-          if (flicker < 0.34) continue;
+          if (flicker < 0.42) continue;
           const edge = edges[index]!;
           const a = nodes[edge.nodeA];
           const b = nodes[edge.nodeB];
           if (!a || !b || (a.pinned && b.pinned)) continue;
-          const fade =
-            Math.min(0.2, level * 0.26) * (0.45 + 0.55 * porosity);
-          const inkIndex = Math.min(
-            INK_LUT_STEPS - 1,
-            Math.max(0, Math.round(fade * (INK_LUT_STEPS - 1))),
-          );
-          if (inkIndex === 0) continue;
-          context.strokeStyle = palette.ink[inkIndex]!;
+          let mask = 1;
+          if (headPoint) {
+            const midX = (a.position.x + b.position.x) * 0.5;
+            const midY = (a.position.y + b.position.y) * 0.5;
+            const headDistance = Math.hypot(
+              midX - headPoint.x,
+              midY - headPoint.y,
+            );
+            mask = clamp((headDistance - maskInner) / (maskOuter - maskInner));
+          }
+          // True ink that thins to nothing: constant colour, falling
+          // alpha - the strand goes transparent, never grey.
+          const alpha = Math.min(0.2, level * 0.26) * mask;
+          if (alpha < 0.012) continue;
+          context.globalAlpha = alpha;
           context.beginPath();
           context.moveTo(a.position.x, a.position.y);
           context.lineTo(b.position.x, b.position.y);
           context.stroke();
         }
+        context.globalAlpha = 1;
       }
 
       // The creature: one continuous brush stroke, tail melting into

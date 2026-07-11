@@ -12,7 +12,7 @@ const DRY_TAU = 9;
  * Diffusion rate toward the neighbourhood level, per second. Slow on
  * purpose: the ink CREEPS outward, a visible bleeding, not a flood.
  */
-const WICK_RATE = 0.9;
+const WICK_RATE = 0.45;
 /**
  * How far off the body's spine an edge can drink, as a ratio of the
  * short side.
@@ -67,13 +67,14 @@ export const inkWickSystem: SimulationSystem = {
       if (ink[index]! < 0.001) ink[index] = 0;
     }
 
-    // Fibres under the body drink fresh ink; the slow rear half of
-    // the body (older ink) feeds them hardest, the crisp head barely
-    // wets the ground - new ink does not bleed, old ink does.
+    // Only the far tail of the body wets the ground: ink needs time
+    // to soak through, so the fibres light up where the line WAS
+    // seconds ago, never under the crisp head. The delay is physical -
+    // the tail arrives there long after the head has left.
     const creature = state.creature;
     const points = creature?.points ?? [];
     const count = points.length;
-    if (count > 4) {
+    if (count > 64) {
       const drinkRadius = DRINK_RADIUS_RATIO * shortSide;
       const drinkSquared = drinkRadius * drinkRadius;
       const rejectSquared = drinkSquared * 9;
@@ -84,20 +85,20 @@ export const inkWickSystem: SimulationSystem = {
         const midX = (a.x + b.x) * 0.5;
         const midY = (a.y + b.y) * 0.5;
         let drink = 0;
-        for (let back = 4; back < 60 && back < count; back += 4) {
+        for (let back = 56; back < 144 && back < count; back += 8) {
           const point = points[count - 1 - back]!;
           const dx = midX - point.x;
           const dy = midY - point.y;
           const distanceSquared = dx * dx + dy * dy;
           if (distanceSquared > rejectSquared) continue;
           // Age along the body: the tail end has soaked longest.
-          const age = back / Math.min(60, count);
-          const s = Math.exp(-distanceSquared / drinkSquared) * (0.25 + 0.75 * age);
+          const age = back / Math.min(144, count);
+          const s = Math.exp(-distanceSquared / drinkSquared) * age;
           if (s > drink) drink = s;
         }
         if (drink > 0.02) {
           ink[index] = clamp(
-            ink[index]! + drink * deltaSeconds * 1.6,
+            ink[index]! + drink * deltaSeconds * 1.3,
             0,
             1,
           );
