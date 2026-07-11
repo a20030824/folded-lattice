@@ -1,7 +1,14 @@
 import type { Renderer } from "../contracts";
-import { clamp, mixRgb, parseColor, rgbString } from "../math";
+import { clamp, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
 import type { Rgb } from "../math";
 import type { Viewport } from "../types";
+
+/**
+ * The relief is rasterized small and blurred up: facets melt into one
+ * continuous pressed surface without adding a single triangle.
+ */
+const RELIEF_SCALE = 1 / 4;
+const RELIEF_BLUR_PX = 6;
 
 const SHADE_LUT_STEPS = 32;
 const INK_LUT_STEPS = 14;
@@ -144,6 +151,8 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
   const backdrop = document.createElement("canvas");
   let backdropKey = "";
   let shadeScratch = new Float32Array(0);
+  const relief = document.createElement("canvas");
+  const reliefContext = relief.getContext("2d")!;
 
   return {
     resize(nextViewport, maximumDevicePixelRatio) {
@@ -223,17 +232,27 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           0.5 +
           (clamp(
             0.5 +
-              (lambert - restLambert) * 2.1 +
-              triangle.foldValue * 0.85 +
-              triangle.memoryBias * 0.5,
+              (lambert - restLambert) * 3 +
+              triangle.foldValue * 1.15 +
+              triangle.memoryBias * 0.7,
           ) -
             0.5) *
             borderFade;
       }
 
+      // Facets are painted small, then blurred up onto the paper: one
+      // continuous pressed surface, no readable triangle edges.
+      const reliefWidth = Math.max(2, Math.round(viewport.width * RELIEF_SCALE));
+      const reliefHeight = Math.max(2, Math.round(viewport.height * RELIEF_SCALE));
+      if (relief.width !== reliefWidth || relief.height !== reliefHeight) {
+        relief.width = reliefWidth;
+        relief.height = reliefHeight;
+      }
+      reliefContext.setTransform(RELIEF_SCALE, 0, 0, RELIEF_SCALE, 0, 0);
+      reliefContext.clearRect(0, 0, viewport.width, viewport.height);
+
       for (const triangle of triangles) {
-        // Blend with the neighbouring facets: the relief reads as one
-        // pressed surface instead of separate crystal shards.
+        // Blend with the neighbouring facets before rasterizing.
         let shadeValue = shadeScratch[triangle.id]!;
         const neighbors = triangle.neighborIndices;
         if (neighbors.length > 0) {
@@ -259,15 +278,20 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           SHADE_LUT_STEPS - 1,
           Math.max(0, Math.round(shadeValue * (SHADE_LUT_STEPS - 1))),
         );
-        context.globalAlpha = render.triangleOpacity;
-        context.fillStyle = palette.shade[lutIndex]!;
-        context.beginPath();
-        context.moveTo(a.position.x, a.position.y);
-        context.lineTo(b.position.x, b.position.y);
-        context.lineTo(c.position.x, c.position.y);
-        context.closePath();
-        context.fill();
+        reliefContext.fillStyle = palette.shade[lutIndex]!;
+        reliefContext.beginPath();
+        reliefContext.moveTo(a.position.x, a.position.y);
+        reliefContext.lineTo(b.position.x, b.position.y);
+        reliefContext.lineTo(c.position.x, c.position.y);
+        reliefContext.closePath();
+        reliefContext.fill();
       }
+
+      context.globalAlpha = render.triangleOpacity;
+      context.filter = `blur(${RELIEF_BLUR_PX}px)`;
+      context.drawImage(relief, 0, 0, viewport.width, viewport.height);
+      context.filter = "none";
+      context.globalAlpha = 1;
 
       // The creature: one continuous brush stroke, tail melting into
       // the paper, width recorded from its pace when each point was laid.
@@ -305,20 +329,44 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           context.stroke();
         }
 
-        // A resting head pools into a drop of ink.
-        if (creature.restPool > 0.05) {
-          const headPoint = points[count - 1]!;
-          context.fillStyle = palette.ink[INK_LUT_STEPS - 1]!;
-          context.beginPath();
-          context.arc(
-            headPoint.x,
-            headPoint.y,
-            maximumWidth * (0.7 + 1.6 * creature.restPool),
-            0,
-            Math.PI * 2,
-          );
-          context.fill();
+        // The head always carries a small pool of gathered ink - which
+        // end is feeling the world is never a guess. It swells into a
+        // drop while resting, and it is a puddle, not a circle: eight
+        // noise-wobbled lobes, slowly breathing.
+        const headPoint = points[count - 1]!;
+        const dropRadius =
+          maximumWidth *
+          (0.55 + 0.35 * headPoint.widthFactor + 1.7 * creature.restPool);
+        const wobbleAmplitude = 0.1 + 0.24 * creature.restPool;
+        const drift = state.time.elapsed * 0.3;
+        context.fillStyle = palette.ink[INK_LUT_STEPS - 1]!;
+        context.beginPath();
+        let previousX = 0;
+        let previousY = 0;
+        let firstX = 0;
+        let firstY = 0;
+        for (let lobe = 0; lobe <= 8; lobe += 1) {
+          const index = lobe % 8;
+          const angle = (index / 8) * Math.PI * 2;
+          const wobble =
+            1 + wobbleAmplitude * (valueNoise2D(index * 3.17 + drift, index * 1.71) - 0.5) * 2;
+          const x = headPoint.x + Math.cos(angle) * dropRadius * wobble;
+          const y = headPoint.y + Math.sin(angle) * dropRadius * wobble;
+          if (lobe === 0) {
+            firstX = x;
+            firstY = y;
+          } else {
+            const midX = (previousX + x) * 0.5;
+            const midY = (previousY + y) * 0.5;
+            if (lobe === 1) context.moveTo(midX, midY);
+            else context.quadraticCurveTo(previousX, previousY, midX, midY);
+          }
+          previousX = x;
+          previousY = y;
         }
+        context.quadraticCurveTo(firstX, firstY, (previousX + firstX) * 0.5, (previousY + firstY) * 0.5);
+        context.closePath();
+        context.fill();
       }
 
       context.globalAlpha = 1;

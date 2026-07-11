@@ -40,6 +40,8 @@ function createCreature(state: SimulationState, seed: number): CreatureState {
     restPool: 0,
     restSign: hash2 < 0.5 ? -1 : 1,
     retractTimer: 0,
+    restEpisode: 0,
+    restPressure: 0,
   };
 }
 
@@ -94,19 +96,34 @@ export const wandererSystem: SimulationSystem = {
     creature.fear *= Math.exp(-FEAR_DECAY_PER_SECOND * deltaSeconds);
     if (creature.fear < 0.002) creature.fear = 0;
 
-    // Pace breathes on slow noise: it lingers, then lopes. When the
-    // noise sinks low enough (and nothing scares it), lingering becomes
-    // a real rest: the creature all but stops and curls up.
+    // Pace breathes on slow noise: it lingers, then lopes. A lull can
+    // become a real rest - and rest is a committed episode, not a
+    // flicker of the noise: once it lies down it finishes the pose
+    // (9-15s), and only a predator close by can interrupt. Sleep
+    // pressure builds while awake, so a rest is rare but the observer
+    // is guaranteed to meet one every couple of minutes.
     const paceNoise = valueNoise2D(time * 0.09 + seed, seed * 3.1);
     const pace = 0.25 + 1.15 * paceNoise * paceNoise;
-    const resting = paceNoise < 0.24 && creature.fear < 0.15;
+    let resting = false;
+    if (creature.restEpisode > 0) {
+      creature.restEpisode -= deltaSeconds;
+      if (creature.fear > 0.3) creature.restEpisode = 0;
+      resting = creature.restEpisode > 0;
+    } else {
+      creature.restPressure += deltaSeconds / 75;
+      const lullThreshold = 0.24 + clamp(creature.restPressure - 1) * 0.3;
+      if (paceNoise < lullThreshold && creature.fear < 0.15) {
+        creature.restEpisode =
+          9 + 6 * valueNoise2D(time * 1.3 + seed * 5.1, 17.9);
+        creature.restPressure = 0;
+        creature.restSign =
+          valueNoise2D(time * 3.7, seed) < 0.5 ? -1 : 1;
+        resting = true;
+      }
+    }
     if (resting) {
       creature.restPool = clamp(creature.restPool + deltaSeconds / 4);
     } else {
-      if (creature.restPool > 0.5 && paceNoise > 0.3) {
-        // Fresh episode next time; pick a new curl direction.
-        creature.restSign = valueNoise2D(time * 3.7, seed) < 0.5 ? -1 : 1;
-      }
       creature.restPool = clamp(creature.restPool - deltaSeconds / 2.5);
     }
 
@@ -207,18 +224,20 @@ export const wandererSystem: SimulationSystem = {
       creature.retractTimer = 0;
     }
 
-    // A narrow deep groove under the last stretch of body, with wide
-    // soft shoulders - the line sits in the valley it made, instead of
-    // riding on crystal shards. Resting presses the drop deeper.
+    // The ground profile is a narrow groove with a weak RAISED shoulder
+    // beside it - displaced paper piles up at the rim, it does not just
+    // dent shallower. The line sits in the valley it made, between two
+    // soft ridges. Resting presses the nest deeper.
     if (settings.carveStrength > 0) {
       const count = creature.points.length;
       const grooveRadius = Math.max(1, settings.carveRadiusRatio * shortSide * 0.55);
-      const shoulderRadius = grooveRadius * 2.6;
+      const shoulderRadius = grooveRadius * 2.4;
       const rejectSquared = shoulderRadius * shoulderRadius * 9;
       const strength = settings.carveStrength * (1 + creature.restPool * 1.2);
       for (const node of state.topology.nodes) {
         if (node.pinned) continue;
-        let press = 0;
+        let down = 0;
+        let ridge = 0;
         for (let back = 0; back < 28 && back < count; back += 4) {
           const point = creature.points[count - 1 - back]!;
           const dx = node.position.x - point.x;
@@ -229,10 +248,13 @@ export const wandererSystem: SimulationSystem = {
           const shoulder = Math.exp(
             -distanceSquared / (shoulderRadius * shoulderRadius),
           );
-          const local = groove * 0.85 + shoulder * 0.3;
-          if (local > press) press = local;
+          if (groove > down) down = groove;
+          const rim = shoulder - groove * 1.2;
+          if (rim > ridge) ridge = rim;
         }
-        if (press > 0.01) node.force.z -= strength * press;
+        if (down > 0.01 || ridge > 0.01) {
+          node.force.z -= strength * (down - ridge * 0.4);
+        }
       }
     }
   },

@@ -180,6 +180,17 @@ export interface CreatureState {
    * Timer that paces the visible tail retraction while shrinking.
    */
   retractTimer: number;
+  /**
+   * Seconds left of the current committed rest episode; 0 when awake.
+   * Once it lies down it finishes the pose - only a predator close by
+   * can interrupt.
+   */
+  restEpisode: number;
+  /**
+   * Sleep pressure, grows while awake. The longer since the last rest,
+   * the easier the next lull becomes one - rest is rare but findable.
+   */
+  restPressure: number;
 }
 
 export interface TopologyState {
