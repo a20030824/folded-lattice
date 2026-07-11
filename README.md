@@ -47,3 +47,10 @@ src/
 - Lively Properties 即時設定橋接
 
 詳細設計與後續 preset 規格保留在 [`初始.md`](./初始.md)。
+
+## Presets
+
+- `http://localhost:5173/` — Wandering Ink
+- `http://localhost:5173/?preset=membrane` — Breathing Membrane
+- `http://localhost:5173/?preset=paper` — Crumpled Paper
+- `http://localhost:5173/?preset=tide` — Tide Archive
