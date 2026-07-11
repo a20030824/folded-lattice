@@ -187,6 +187,12 @@ export interface CreatureState {
    */
   restEpisode: number;
   /**
+   * Where this rest began. The ink pools there and stays there - the
+   * body curls around the drop, the drop does not follow the head.
+   */
+  restAnchorX: number;
+  restAnchorY: number;
+  /**
    * Sleep pressure, grows while awake. The longer since the last rest,
    * the easier the next lull becomes one - rest is rare but findable.
    */

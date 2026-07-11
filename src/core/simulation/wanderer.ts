@@ -42,6 +42,8 @@ function createCreature(state: SimulationState, seed: number): CreatureState {
     retractTimer: 0,
     restEpisode: 0,
     restPressure: 0,
+    restAnchorX: x,
+    restAnchorY: y,
   };
 }
 
@@ -114,10 +116,12 @@ export const wandererSystem: SimulationSystem = {
       const lullThreshold = 0.24 + clamp(creature.restPressure - 1) * 0.3;
       if (paceNoise < lullThreshold && creature.fear < 0.15) {
         creature.restEpisode =
-          9 + 6 * valueNoise2D(time * 1.3 + seed * 5.1, 17.9);
+          7 + 4 * valueNoise2D(time * 1.3 + seed * 5.1, 17.9);
         creature.restPressure = 0;
         creature.restSign =
           valueNoise2D(time * 3.7, seed) < 0.5 ? -1 : 1;
+        creature.restAnchorX = headX;
+        creature.restAnchorY = headY;
         resting = true;
       }
     }

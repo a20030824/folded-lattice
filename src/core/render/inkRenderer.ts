@@ -334,7 +334,8 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
         // drop is a puddle, not a circle: eight noise-wobbled lobes,
         // slowly breathing.
         if (creature.restPool > 0.05) {
-          const headPoint = points[count - 1]!;
+          // The drop stays where the rest began; the body curls around
+          // it and, on waking, walks away leaving it to soak in.
           const dropRadius =
             maximumWidth * (0.5 + 1.8 * creature.restPool);
           const wobbleAmplitude = 0.1 + 0.24 * creature.restPool;
@@ -353,8 +354,10 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
               wobbleAmplitude *
                 (valueNoise2D(index * 3.17 + drift, index * 1.71) - 0.5) *
                 2;
-            const x = headPoint.x + Math.cos(angle) * dropRadius * wobble;
-            const y = headPoint.y + Math.sin(angle) * dropRadius * wobble;
+            const x =
+              creature.restAnchorX + Math.cos(angle) * dropRadius * wobble;
+            const y =
+              creature.restAnchorY + Math.sin(angle) * dropRadius * wobble;
             if (lobe === 0) {
               firstX = x;
               firstY = y;
