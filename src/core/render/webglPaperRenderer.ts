@@ -308,7 +308,10 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     alpha: false,
     antialias: true,
     depth: false,
-    preserveDrawingBuffer: false,
+    // Topology handovers copy the previous paper into a short-lived
+    // transition texture. Without this the browser may discard the
+    // default framebuffer after presenting, leaving that texture black.
+    preserveDrawingBuffer: true,
   });
   if (!gl) throw new Error("WebGL is not available.");
 
