@@ -205,6 +205,24 @@ export interface CreatureState {
   restPressure: number;
 }
 
+/**
+ * A direction living on every triangle: the sheet's grain. Chaotic
+ * and nearly invisible at rest, it is COMBED into alignment by the
+ * creature's body (and by a dragging pointer), then slowly loosens
+ * back into noise. The line's power over space is direction.
+ */
+export interface GrainFieldState {
+  /** Orientation per triangle, radians in [0, PI). */
+  angle: Float32Array;
+  /** 0..1 combed alignment; 0 reads as loose chaos. */
+  align: Float32Array;
+  /**
+   * 0..1 how much of the alignment was combed by the pointer; the
+   * creature only treats strongly hand-combed grain as a message.
+   */
+  handmark: Float32Array;
+}
+
 export interface TopologyState {
   nodes: NodeState[];
   edges: EdgeState[];
@@ -220,6 +238,7 @@ export interface SimulationState {
   viewport: Viewport;
   time: TimeState;
   creature?: CreatureState;
+  grain?: GrainFieldState;
 }
 
 export function createEmptySimulationState(viewport: Viewport): SimulationState {

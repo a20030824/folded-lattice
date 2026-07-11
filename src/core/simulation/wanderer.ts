@@ -185,6 +185,44 @@ export const wandererSystem: SimulationSystem = {
       }
     }
 
+    // A strongly hand-combed patch of grain is a message: the
+    // creature reads the current the hand has drawn nearby and swims
+    // along it for a while - curiosity, not compulsion. Its own
+    // combing never saturates the handmark channel, so it does not
+    // chase its own footprints.
+    const grain = state.grain;
+    if (!resting && creature.fear < 0.2 && grain) {
+      const triangles = state.topology.triangles;
+      const readRadius = shortSide * 0.18;
+      const readSquared = readRadius * readRadius;
+      let orientX = 0;
+      let orientY = 0;
+      let readWeight = 0;
+      for (let index = 0; index < triangles.length; index += 1) {
+        const mark = grain.handmark[index]!;
+        if (mark < 0.35) continue;
+        const center = triangles[index]!.center;
+        const dx = center.x - headX;
+        const dy = center.y - headY;
+        const distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared > readSquared) continue;
+        const weight =
+          mark * Math.exp(-distanceSquared / (readSquared * 0.5));
+        orientX += Math.cos(grain.angle[index]! * 2) * weight;
+        orientY += Math.sin(grain.angle[index]! * 2) * weight;
+        readWeight += weight;
+      }
+      if (readWeight > 0.4) {
+        const orientation = Math.atan2(orientY, orientX) / 2;
+        // An orientation offers two ways to swim; take the gentler turn.
+        const forward = angleDelta(creature.heading, orientation);
+        const backward = angleDelta(creature.heading, orientation + Math.PI);
+        const gentler =
+          Math.abs(forward) <= Math.abs(backward) ? forward : backward;
+        turn += gentler * clamp(readWeight * 0.5) * 1.6;
+      }
+    }
+
     // Soft walls steer it back toward open ground.
     const margin = settings.marginRatio * shortSide;
     let steerX = 0;

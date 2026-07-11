@@ -293,6 +293,46 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       context.filter = "none";
       context.globalAlpha = 1;
 
+      // The grain: one fine oriented stroke per facet. Chaotic and
+      // whisper-faint at rest; where the creature (or a dragging
+      // hand) has combed it, the strokes align and surface - the
+      // world of the line is itself made of little lines.
+      const grain = state.grain;
+      if (grain && grain.align.length === triangles.length) {
+        context.lineWidth = 1;
+        for (let index = 0; index < triangles.length; index += 1) {
+          const triangle = triangles[index]!;
+          const align = grain.align[index]!;
+          const mark = grain.handmark[index]!;
+          const fade = 0.055 + 0.38 * align + 0.25 * mark;
+          const inkIndex = Math.min(
+            INK_LUT_STEPS - 1,
+            Math.max(0, Math.round(fade * (INK_LUT_STEPS - 1))),
+          );
+          if (inkIndex === 0) continue;
+          const center = triangle.center;
+          const borderDistance = Math.min(
+            center.x,
+            center.y,
+            viewport.width - center.x,
+            viewport.height - center.y,
+          );
+          if (borderDistance < 26) continue;
+          const angle = grain.angle[index]!;
+          const half = Math.min(
+            12,
+            Math.max(3.5, Math.sqrt(triangle.baseArea) * 0.28),
+          );
+          const dx = Math.cos(angle) * half;
+          const dy = Math.sin(angle) * half;
+          context.strokeStyle = palette.ink[inkIndex]!;
+          context.beginPath();
+          context.moveTo(center.x - dx, center.y - dy);
+          context.lineTo(center.x + dx, center.y + dy);
+          context.stroke();
+        }
+      }
+
       // The creature: one continuous brush stroke, tail melting into
       // the paper, width recorded from its pace when each point was laid.
       const creature = state.creature;

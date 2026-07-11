@@ -4,6 +4,7 @@ import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { memorySystem } from "../core/memory/updateMemory";
 import { springSystem } from "../core/simulation/applySprings";
 import { integrationSystem } from "../core/simulation/integrate";
+import { grainCombSystem } from "../core/simulation/grainComb";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
 import { wandererSystem } from "../core/simulation/wanderer";
@@ -140,6 +141,7 @@ export const wanderingInkPreset: PresetDefinition = {
   simulationSystems: [
     resetForcesSystem,
     wandererSystem,
+    grainCombSystem,
     springSystem,
     integrationSystem,
     geometrySystem,
