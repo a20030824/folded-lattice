@@ -15,6 +15,13 @@ export interface PhysicsConfig {
   maximumDepthRatio: number;
   maximumVelocity: number;
   solverIterations: number;
+  /**
+   * Optional linear z-coupling between edge neighbours, like the
+   * pre-tension of a taut membrane. Length-based springs alone have
+   * no first-order transverse stiffness, so without this term small
+   * ripples cannot travel. 0 (default) keeps the classic behaviour.
+   */
+  transverseSpringStrength?: number;
 }
 
 export interface PressureFieldConfig {
@@ -267,6 +274,8 @@ export interface ContourConfig {
   legacyColor: string;
   legacyOpacity: number;
   legacyWidth: number;
+  /** Grid used to keep long-term marks from repeatedly occupying one region. */
+  legacySpatialGrid: number;
 }
 
 /**

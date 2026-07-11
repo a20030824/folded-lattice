@@ -218,6 +218,10 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           triangle.normal.x * lx +
           triangle.normal.y * ly +
           Math.abs(triangle.normal.z) * lz;
+        // Height term: smooth swells have almost no slope, so crests
+        // are lit and troughs cooled by elevation directly - this is
+        // what makes a travelling ring readable on water.
+        const heightShade = triangle.center.z * 0.05;
         // Relief melts away within a band of the border so hull slivers
         // never streak along the screen edge.
         const borderDistance = Math.min(
@@ -233,6 +237,7 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           (clamp(
             0.5 +
               (lambert - restLambert) * 3.4 +
+              heightShade +
               triangle.foldValue * 1.25 +
               triangle.memoryBias * 0.45,
           ) -

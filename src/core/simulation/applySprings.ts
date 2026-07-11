@@ -6,6 +6,12 @@ export const springSystem: SimulationSystem = {
     const { nodes, edges } = state.topology;
     const physics = config.physics;
 
+    // Pre-tension term: length-based springs restore transverse
+    // displacement only to second order, so a preset that wants
+    // travelling ripples (water) opts into a linear z coupling.
+    const transverse =
+      physics.springStrength * (physics.transverseSpringStrength ?? 0);
+
     for (const edge of edges) {
       const a = nodes[edge.nodeA]!;
       const b = nodes[edge.nodeB]!;
@@ -21,16 +27,17 @@ export const springSystem: SimulationSystem = {
       const nx = dx / length;
       const ny = dy / length;
       const nz = dz / length;
+      const tensionForce = dz * transverse;
 
       if (!a.pinned) {
         a.force.x += nx * planarForce;
         a.force.y += ny * planarForce;
-        a.force.z += nz * verticalForce;
+        a.force.z += nz * verticalForce + tensionForce;
       }
       if (!b.pinned) {
         b.force.x -= nx * planarForce;
         b.force.y -= ny * planarForce;
-        b.force.z -= nz * verticalForce;
+        b.force.z -= nz * verticalForce + tensionForce;
       }
     }
 

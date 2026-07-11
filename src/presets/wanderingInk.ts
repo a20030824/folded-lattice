@@ -20,13 +20,17 @@ const config: FoldedLatticeConfig = {
     randomSeed: 7351,
   },
   physics: {
-    // The sheet recovers within seconds: the wake is a memory of
-    // minutes only where the creature keeps returning.
-    springStrength: 8,
+    // WATER, not paper: low damping so disturbances travel as visible
+    // ripples through the spring weave before they die out.
+    springStrength: 26,
     planarSpringStrength: 0.6,
-    verticalSpringStrength: 1.15,
-    damping: 4.4,
-    restPoseStrength: 0.5,
+    verticalSpringStrength: 1.6,
+    damping: 1.4,
+    // Low rest pull: a stiff rest pose traps disturbances as local
+    // oscillation; on water the levelling is done by tension.
+    restPoseStrength: 0.12,
+    // The taut-surface term that lets rings actually travel.
+    transverseSpringStrength: 2.2,
     maximumDepthRatio: 0.085,
     maximumVelocity: 320,
     solverIterations: 1,
@@ -60,9 +64,9 @@ const config: FoldedLatticeConfig = {
     edgeAccumulationRate: 0,
     edgeDecayRate: 0,
     edgeRestLengthInfluence: 0,
-    // Where the creature walks often, the paper stays creased longer.
-    triangleAccumulationRate: 0.04,
-    triangleDecayRate: 0.012,
+    // Water does not remember paths; only live waves carry the past.
+    triangleAccumulationRate: 0,
+    triangleDecayRate: 0.05,
     maximumMemory: 0.6,
   },
   // Unused by the ink renderer; present to satisfy the shared config.
@@ -98,13 +102,15 @@ const config: FoldedLatticeConfig = {
       nodeGlintOpacity: 0,
     },
     colors: {
-      background: "#ded7c9",
+      // Pale celadon water: crests catch light, troughs cool toward
+      // slate. The dark ink line floats on top.
+      background: "#dde5df",
       edge: "#000000",
       edgeHighlight: "#000000",
-      trianglePositive: "#f2ebdc",
-      triangleNegative: "#aab4c1",
-      glow: "#f2ead8",
-      ink: "#34425c",
+      trianglePositive: "#f5f8ef",
+      triangleNegative: "#96abbd",
+      glow: "#eef4ec",
+      ink: "#2f3f57",
     },
   },
   performance: {
@@ -124,7 +130,7 @@ const config: FoldedLatticeConfig = {
     pointerRepelRadiusRatio: 0.24,
     pointerRepelTurnRate: 5,
     pointerSpeedBoost: 1.2,
-    carveStrength: 46,
+    carveStrength: 80,
     carveRadiusRatio: 0.065,
     inkWidthRatio: 0.005,
   },
