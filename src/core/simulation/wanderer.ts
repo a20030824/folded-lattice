@@ -44,6 +44,7 @@ function createCreature(state: SimulationState, seed: number): CreatureState {
     restPressure: 0,
     restAnchorX: x,
     restAnchorY: y,
+    restHeading: hash * Math.PI * 2,
   };
 }
 
@@ -122,6 +123,7 @@ export const wandererSystem: SimulationSystem = {
           valueNoise2D(time * 3.7, seed) < 0.5 ? -1 : 1;
         creature.restAnchorX = headX;
         creature.restAnchorY = headY;
+        creature.restHeading = creature.heading;
         resting = true;
       }
     }

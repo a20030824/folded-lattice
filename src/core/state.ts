@@ -193,6 +193,12 @@ export interface CreatureState {
   restAnchorX: number;
   restAnchorY: number;
   /**
+   * Heading at the moment the rest began. The ink blot soaks backward
+   * along this direction, so its eccentricity comes from the body,
+   * not from radial noise.
+   */
+  restHeading: number;
+  /**
    * Sleep pressure, grows while awake. The longer since the last rest,
    * the easier the next lull becomes one - rest is rare but findable.
    */
