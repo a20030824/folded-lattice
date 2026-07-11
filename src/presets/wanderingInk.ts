@@ -29,7 +29,7 @@ const config: FoldedLatticeConfig = {
     planarSpringStrength: 0.6,
     verticalSpringStrength: 1.15,
     damping: 4.4,
-    restPoseStrength: 0.5,
+    restPoseStrength: 0.1,
     maximumDepthRatio: 0.085,
     maximumVelocity: 320,
     solverIterations: 1,
@@ -66,7 +66,7 @@ const config: FoldedLatticeConfig = {
     // The crumple lingers VERY long (judge: keep the changed face
     // around) - roughly ten minutes to relax to 1/e.
     triangleAccumulationRate: 0.04,
-    triangleDecayRate: 0.0015,
+    triangleDecayRate: 0.0001,
     maximumMemory: 0.6,
   },
   // Unused by the ink renderer; present to satisfy the shared config.

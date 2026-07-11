@@ -93,22 +93,70 @@ export const wandererSystem: SimulationSystem = {
     // hand has left. This is the only thing the pointer touches.
     const pointer = state.pointer;
     let escapeTurn = 0;
+    let beingPursued = false;
+
     if (pointer.isInside && pointer.influence > 0.03) {
       const awayX = headX - pointer.position.x;
       const awayY = headY - pointer.position.y;
       const distance = Math.hypot(awayX, awayY);
-      const frightRadius = settings.pointerRepelRadiusRatio * shortSide;
+
+      const frightRadius =
+        settings.pointerRepelRadiusRatio * shortSide;
+
       if (distance < frightRadius && distance > 0.001) {
-        const fright = (1 - distance / frightRadius) ** 2 * pointer.influence;
-        creature.fear = Math.max(creature.fear, clamp(fright));
-        const escape = Math.atan2(awayY, awayX);
+        beingPursued = true;
+
+        const proximity = clamp(
+          1 - distance / frightRadius,
+        );
+
+        /*
+        * 持續追逐就累積 fear。
+        * 基礎每秒增加 0.35，貼得越近最多每秒增加 0.65。
+        */
+        const fearGainPerSecond =
+          0.35 + proximity * 0.3;
+
+        creature.fear = clamp(
+          creature.fear +
+            fearGainPerSecond *
+              pointer.influence *
+              deltaSeconds,
+        );
+
+        const escape = Math.atan2(
+          awayY,
+          awayX,
+        );
+
         escapeTurn =
-          angleDelta(creature.heading, escape) *
-          clamp(fright * settings.pointerRepelTurnRate, 0, 6);
+          angleDelta(
+            creature.heading,
+            escape,
+          ) *
+          clamp(
+            creature.fear *
+              settings.pointerRepelTurnRate,
+            0,
+            6,
+          );
       }
     }
-    creature.fear *= Math.exp(-FEAR_DECAY_PER_SECOND * deltaSeconds);
-    if (creature.fear < 0.002) creature.fear = 0;
+
+    /*
+    * 沒被追時才慢慢冷靜。
+    * 被追時不衰減，避免一邊增加一邊扣除。
+    */
+    if (!beingPursued) {
+      creature.fear *= Math.exp(
+        -FEAR_DECAY_PER_SECOND *
+          deltaSeconds,
+      );
+    }
+
+    if (creature.fear < 0.002) {
+      creature.fear = 0;
+    }
 
     // Pace breathes on slow noise: it lingers, then lopes. A lull can
     // become a real rest - and rest is a committed episode, not a

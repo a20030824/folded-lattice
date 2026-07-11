@@ -13,6 +13,7 @@ import { tideArchivePreset } from "../presets/tideArchive";
 import { wanderingInkPreset } from "../presets/wanderingInk";
 import { installLivelyBridge } from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
+import {createWebglMembraneRenderer,} from "../core/render/webglMembraneRenderer";
 
 let canvas = document.querySelector<HTMLCanvasElement>("#wallpaper");
 if (!canvas) throw new Error('Canvas element "#wallpaper" was not found.');
@@ -53,19 +54,56 @@ if (preset === wanderingInkPreset && preset.config.creature) {
     creature.pointerSpeedBoost = 1.6;
   }
 }
-function createRendererFor(presetId: string): ReturnType<typeof createCanvasRenderer> {
-  if (presetId === "tide-archive") return createContourRenderer(canvas!);
-  if (presetId === "wandering-ink") return createInkRenderer(canvas!);
-  if (presetId !== "crumpled-paper") return createCanvasRenderer(canvas!);
+function createRendererFor(
+  presetId: string,
+): ReturnType<typeof createCanvasRenderer> {
+  if (presetId === "tide-archive") {
+    return createContourRenderer(canvas!);
+  }
+
+  if (presetId === "wandering-ink") {
+    return createInkRenderer(canvas!);
+  }
+
+  if (presetId === "breathing-membrane") {
+    try {
+      return createWebglMembraneRenderer(canvas!);
+    } catch (error) {
+      console.error(
+        "WebGL membrane renderer unavailable, falling back:",
+        error,
+      );
+
+      // 取得過 WebGL context 的 canvas 不能再穩定取得 2D context，
+      // 所以 fallback 前必須換成一張新的 canvas。
+      const replacement =
+        canvas!.cloneNode(false) as HTMLCanvasElement;
+
+      canvas!.replaceWith(replacement);
+      canvas = replacement;
+
+      return createCanvasRenderer(replacement);
+    }
+  }
+
+  if (presetId !== "crumpled-paper") {
+    return createCanvasRenderer(canvas!);
+  }
+
   try {
     return createWebglPaperRenderer(canvas!);
   } catch (error) {
-    console.error("WebGL paper renderer unavailable, falling back:", error);
-    // A canvas that has held a WebGL context cannot hand out a 2D one;
-    // swap in a fresh element for the Canvas 2D fallback.
-    const replacement = canvas!.cloneNode(false) as HTMLCanvasElement;
+    console.error(
+      "WebGL paper renderer unavailable, falling back:",
+      error,
+    );
+
+    const replacement =
+      canvas!.cloneNode(false) as HTMLCanvasElement;
+
     canvas!.replaceWith(replacement);
     canvas = replacement;
+
     return createPaperRenderer(replacement);
   }
 }
