@@ -46,6 +46,7 @@ uniform vec2 uResolution;
 uniform float uAspect;
 uniform float uGrain;
 uniform float uSheen;
+uniform float uOpacity;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -100,7 +101,7 @@ void main() {
   float centerDistance = distance(vUv * vec2(uAspect, 1.0), vec2(0.5 * uAspect, 0.5));
   color = mix(color, uShadowTint * 0.85, smoothstep(0.44, 1.1, centerDistance) * 0.3);
 
-  gl_FragColor = vec4(color, 1.0);
+  gl_FragColor = vec4(color, uOpacity);
 }
 `;
 
@@ -146,8 +147,6 @@ interface MeshBinding {
    */
   vertexCreaseId: Int32Array;
   vertexFromOrigin: Float32Array;
-  /** The crease whose rail owns this vertex's local transition region. */
-  vertexRegionCreaseId: Int32Array;
   cornerNodes: Int32Array;
   faceNormals: Float32Array;
   nodeOcclusion: Float32Array;
@@ -159,11 +158,11 @@ interface MeshBinding {
  * facet). Paper facets stay slightly planar; 1.0 would read as soft cloth.
  */
 const NORMAL_SMOOTHING = 0.78;
-const FOLD_SETTLE_SECONDS = 0.7;
+const TOPOLOGY_CROSSFADE_SECONDS = 0.7;
 
-interface FoldSettleTransition {
+interface TopologyCrossfade {
   startedAt: number;
-  creaseId: number;
+  outgoingMesh: MeshBinding;
 }
 
 function buildMeshBinding(topology: TopologyState): MeshBinding {
@@ -214,8 +213,6 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
   const groupSideCounts = new Int32Array(vertexCount);
   const vertexCreaseId = new Int32Array(vertexCount);
   const vertexFromOrigin = new Float32Array(vertexCount);
-  const vertexRegionCreaseId = new Int32Array(vertexCount);
-  vertexRegionCreaseId.fill(-1);
   const cornerNodes = new Int32Array(vertexCount);
   const groups: number[] = [];
 
@@ -260,30 +257,6 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
     }
   }
 
-  // The new rail and one ring of facets around it are the only part that
-  // visually settles after a remesh. The rest of the paper is untouched.
-  const markRegion = (triangleIndex: number, creaseId: number): void => {
-    const triangle = triangles[triangleIndex];
-    if (!triangle) return;
-    for (let corner = 0; corner < 3; corner += 1) {
-      const vertex = triangleIndex * 3 + corner;
-      if (vertexRegionCreaseId[vertex] === -1) {
-        vertexRegionCreaseId[vertex] = creaseId;
-      }
-    }
-  };
-  for (const creaseEdge of creaseEdges) {
-    for (const triangleIndex of [creaseEdge.triangleA, creaseEdge.triangleB]) {
-      if (triangleIndex < 0) continue;
-      markRegion(triangleIndex, creaseEdge.creaseId);
-      const triangle = triangles[triangleIndex];
-      if (!triangle) continue;
-      for (const neighborIndex of triangle.neighborIndices) {
-        markRegion(neighborIndex, creaseEdge.creaseId);
-      }
-    }
-  }
-
   const nodeAverageEdge = new Float32Array(nodes.length);
   for (const node of nodes) {
     let total = 0;
@@ -307,7 +280,6 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
     smoothingGroups: Int32Array.from(groups),
     vertexCreaseId,
     vertexFromOrigin,
-    vertexRegionCreaseId,
     cornerNodes,
     faceNormals: new Float32Array(triangles.length * 3),
     nodeOcclusion: new Float32Array(nodes.length),
@@ -349,6 +321,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     aspect: gl.getUniformLocation(program, "uAspect"),
     grain: gl.getUniformLocation(program, "uGrain"),
     sheen: gl.getUniformLocation(program, "uSheen"),
+    opacity: gl.getUniformLocation(program, "uOpacity"),
   };
 
   const positionBuffer = gl.createBuffer();
@@ -357,7 +330,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
 
   let viewport: Viewport = { width: 1, height: 1, devicePixelRatio: 1 };
   let mesh: MeshBinding | null = null;
-  let foldSettle: FoldSettleTransition | null = null;
+  let crossfade: TopologyCrossfade | null = null;
 
   const uploadStatic = (): void => {
     if (!mesh) return;
@@ -373,8 +346,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     state: Readonly<SimulationState>,
     depthProjection: number,
     occlusionStrength: number,
-    settleProgress: number,
-    settlingCreaseId: number | null,
   ): void => {
     if (!mesh) return;
     const { nodes, triangles } = state.topology;
@@ -382,7 +353,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       positions, normals, occlusions, faceNormals,
       groupAllOffsets, groupAllCounts, groupSideOffsets, groupSideCounts,
       smoothingGroups, vertexCreaseId, vertexFromOrigin, cornerNodes,
-      vertexRegionCreaseId, nodeOcclusion, nodeAverageEdge,
+      nodeOcclusion, nodeAverageEdge,
     } = mesh;
 
     // Sharpness is read from the LIVING creases every frame, not from a
@@ -451,7 +422,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
             sharpness =
               clamp(crease.strength * 1.4) *
               clamp((crease.growth - vertexFromOrigin[vertex]!) / 0.12);
-            if (creaseId === settlingCreaseId) sharpness *= settleProgress;
           }
         }
 
@@ -494,13 +464,9 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
           smoothZ /= blended;
         }
 
-        const isSettlingRegion = vertexRegionCreaseId[vertex] === settlingCreaseId;
-        const smoothing = isSettlingRegion
-          ? NORMAL_SMOOTHING + 0.14 * (1 - settleProgress)
-          : NORMAL_SMOOTHING;
-        let x = smoothX * smoothing + flatX * (1 - smoothing);
-        let y = smoothY * smoothing + flatY * (1 - smoothing);
-        let z = smoothZ * smoothing + flatZ * (1 - smoothing);
+        let x = smoothX * NORMAL_SMOOTHING + flatX * (1 - NORMAL_SMOOTHING);
+        let y = smoothY * NORMAL_SMOOTHING + flatY * (1 - NORMAL_SMOOTHING);
+        let z = smoothZ * NORMAL_SMOOTHING + flatZ * (1 - NORMAL_SMOOTHING);
         const length = Math.max(1e-6, Math.hypot(x, y, z));
         x /= length;
         y /= length;
@@ -509,23 +475,31 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
         normals[vertex * 3] = x;
         normals[vertex * 3 + 1] = y;
         normals[vertex * 3 + 2] = z;
-        const targetOcclusion = nodeOcclusion[cornerNodes[vertex]!]!;
-        occlusions[vertex] = isSettlingRegion
-          ? targetOcclusion + (1 - targetOcclusion) * (1 - settleProgress) * 0.45
-          : targetOcclusion;
+        occlusions[vertex] = nodeOcclusion[cornerNodes[vertex]!]!;
       }
     }
   };
 
-  const beginFoldSettle = (state: Readonly<SimulationState>): void => {
-    const newborn = state.topology.creaseField?.creases.reduce<CreaseState | null>(
-      (latest, crease) =>
-        crease.age < 0.2 && (!latest || crease.id > latest.id) ? crease : latest,
-      null,
-    );
-    foldSettle = newborn
-      ? { startedAt: state.time.elapsed, creaseId: newborn.id }
-      : null;
+  const drawMesh = (binding: MeshBinding, reallocateBuffers: boolean): void => {
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    if (reallocateBuffers) gl.bufferData(gl.ARRAY_BUFFER, binding.positions, gl.DYNAMIC_DRAW);
+    else gl.bufferSubData(gl.ARRAY_BUFFER, 0, binding.positions);
+    gl.enableVertexAttribArray(attributes.position);
+    gl.vertexAttribPointer(attributes.position, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    if (reallocateBuffers) gl.bufferData(gl.ARRAY_BUFFER, binding.normals, gl.DYNAMIC_DRAW);
+    else gl.bufferSubData(gl.ARRAY_BUFFER, 0, binding.normals);
+    gl.enableVertexAttribArray(attributes.normal);
+    gl.vertexAttribPointer(attributes.normal, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, occlusionBuffer);
+    if (reallocateBuffers) gl.bufferData(gl.ARRAY_BUFFER, binding.occlusions, gl.DYNAMIC_DRAW);
+    else gl.bufferSubData(gl.ARRAY_BUFFER, 0, binding.occlusions);
+    gl.enableVertexAttribArray(attributes.occlusion);
+    gl.vertexAttribPointer(attributes.occlusion, 1, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.TRIANGLES, 0, binding.vertexCount);
   };
 
   return {
@@ -548,28 +522,22 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       if (state.topology.triangles.length === 0) return;
 
       if (!mesh || mesh.topology !== state.topology) {
-        if (mesh) beginFoldSettle(state);
+        if (mesh) {
+          crossfade = { startedAt: state.time.elapsed, outgoingMesh: mesh };
+        }
         mesh = buildMeshBinding(state.topology);
         uploadStatic();
       }
 
-      let settleProgress = 1;
-      let settlingCreaseId: number | null = null;
-      if (foldSettle) {
+      let crossfadeProgress = 1;
+      if (crossfade) {
         const elapsed = clamp(
-          (state.time.elapsed - foldSettle.startedAt) / FOLD_SETTLE_SECONDS,
+          (state.time.elapsed - crossfade.startedAt) / TOPOLOGY_CROSSFADE_SECONDS,
         );
-        settleProgress = elapsed * elapsed * (3 - 2 * elapsed);
-        settlingCreaseId = foldSettle.creaseId;
-        if (elapsed >= 1) foldSettle = null;
+        crossfadeProgress = elapsed * elapsed * (3 - 2 * elapsed);
+        if (elapsed >= 1) crossfade = null;
       }
-      updateMesh(
-        state,
-        config.render.depthProjection,
-        settings.valleyShadowStrength,
-        settleProgress,
-        settlingCreaseId,
-      );
+      updateMesh(state, config.render.depthProjection, settings.valleyShadowStrength);
 
       const background = parseColor(config.render.colors.background);
       gl.clearColor(background.r / 255, background.g / 255, background.b / 255, 1);
@@ -606,22 +574,20 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       gl.uniform1f(uniforms.grain, settings.grainOpacity * 0.32);
       gl.uniform1f(uniforms.sheen, settings.ridgeLightStrength * 0.12);
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.positions);
-      gl.enableVertexAttribArray(attributes.position);
-      gl.vertexAttribPointer(attributes.position, 2, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.normals);
-      gl.enableVertexAttribArray(attributes.normal);
-      gl.vertexAttribPointer(attributes.normal, 3, gl.FLOAT, false, 0, 0);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, occlusionBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.occlusions);
-      gl.enableVertexAttribArray(attributes.occlusion);
-      gl.vertexAttribPointer(attributes.occlusion, 1, gl.FLOAT, false, 0, 0);
-
-      gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount);
+      if (crossfade) {
+        // The outgoing image is real retained geometry, not a framebuffer
+        // copy. The incoming topology fades over it in the same draw pass.
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.uniform1f(uniforms.opacity, 1);
+        drawMesh(crossfade.outgoingMesh, true);
+        gl.uniform1f(uniforms.opacity, crossfadeProgress);
+        drawMesh(mesh, true);
+        gl.disable(gl.BLEND);
+      } else {
+        gl.uniform1f(uniforms.opacity, 1);
+        drawMesh(mesh, false);
+      }
     },
 
     dispose() {
