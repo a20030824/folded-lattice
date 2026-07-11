@@ -161,12 +161,6 @@ interface MeshBinding {
  * facet). Paper facets stay slightly planar; 1.0 would read as soft cloth.
  */
 const NORMAL_SMOOTHING = 0.78;
-const TOPOLOGY_HANDOVER_SECONDS = 0.72;
-
-interface TopologyTransition {
-  startedAt: number;
-  creaseId: number | null;
-}
 
 function buildMeshBinding(
   topology: TopologyState,
@@ -402,7 +396,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
 
   let viewport: Viewport = { width: 1, height: 1, devicePixelRatio: 1 };
   let mesh: MeshBinding | null = null;
-  let transition: TopologyTransition | null = null;
 
   const uploadStatic = (): void => {
     if (!mesh) return;
@@ -586,19 +579,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
         normals[vertex * 3 + 2] = z;
       }
     }
-  };
-
-  const beginTopologyTransition = (state: Readonly<SimulationState>): void => {
-    const field = state.topology.creaseField;
-    const newborn = field?.creases.reduce<CreaseState | null>(
-      (latest, crease) =>
-        crease.age < 0.2 && (!latest || crease.id > latest.id) ? crease : latest,
-      null,
-    );
-    transition = {
-      startedAt: state.time.elapsed,
-      creaseId: newborn?.id ?? null,
-    };
   };
 
   return {
