@@ -4,7 +4,6 @@ import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { memorySystem } from "../core/memory/updateMemory";
 import { springSystem } from "../core/simulation/applySprings";
 import { integrationSystem } from "../core/simulation/integrate";
-import { grainCombSystem } from "../core/simulation/grainComb";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
 import { wandererSystem } from "../core/simulation/wanderer";
@@ -61,9 +60,10 @@ const config: FoldedLatticeConfig = {
     edgeAccumulationRate: 0,
     edgeDecayRate: 0,
     edgeRestLengthInfluence: 0,
-    // Where the creature walks often, the paper stays creased longer.
+    // The crumple lingers long (judge: the desk should not stay
+    // blank); the settled crease lines carry the even older past.
     triangleAccumulationRate: 0.04,
-    triangleDecayRate: 0.012,
+    triangleDecayRate: 0.004,
     maximumMemory: 0.6,
   },
   // Unused by the ink renderer; present to satisfy the shared config.
@@ -141,7 +141,6 @@ export const wanderingInkPreset: PresetDefinition = {
   simulationSystems: [
     resetForcesSystem,
     wandererSystem,
-    grainCombSystem,
     springSystem,
     integrationSystem,
     geometrySystem,

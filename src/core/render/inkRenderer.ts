@@ -293,49 +293,50 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       context.filter = "none";
       context.globalAlpha = 1;
 
-      // The grain: one fine oriented stroke per facet. Chaotic and
-      // whisper-faint at rest; where the creature (or a dragging
-      // hand) has combed it, the strokes align and surface - the
-      // world of the line is itself made of little lines.
-      const grain = state.grain;
-      if (grain && grain.align.length === triangles.length) {
-        context.lineWidth = 1;
-        for (let index = 0; index < triangles.length; index += 1) {
-          const triangle = triangles[index]!;
-          const align = grain.align[index]!;
-          const mark = grain.handmark[index]!;
-          const fade = 0.055 + 0.38 * align + 0.25 * mark;
+      // The settled creases: where the body passed long enough ago
+      // that the crumple has relaxed, the gathered seam has dried
+      // into a thin sharp fold line - the line's past is still a
+      // line, faint but crisp, and it stays. Alpha ramps in as the
+      // relief lets go, and eases out only at the very end of the
+      // bounded trail.
+      const creature = state.creature;
+      if (creature && creature.creaseTrail.length > 1) {
+        const trail = creature.creaseTrail;
+        const now = state.time.elapsed;
+        context.lineWidth = 0.8;
+        let previous = trail[0]!;
+        for (let index = 1; index < trail.length; index += 1) {
+          const point = trail[index]!;
+          const gap = Math.hypot(point.x - previous.x, point.y - previous.y);
+          if (gap > 40) {
+            previous = point;
+            continue;
+          }
+          const age = now - point.bornAt;
+          const settle = clamp((age - 18) / 55);
+          if (settle <= 0.02) {
+            previous = point;
+            continue;
+          }
+          const endFade = Math.min(1, index / 260);
+          const fade = 0.2 * settle * endFade;
           const inkIndex = Math.min(
             INK_LUT_STEPS - 1,
             Math.max(0, Math.round(fade * (INK_LUT_STEPS - 1))),
           );
-          if (inkIndex === 0) continue;
-          const center = triangle.center;
-          const borderDistance = Math.min(
-            center.x,
-            center.y,
-            viewport.width - center.x,
-            viewport.height - center.y,
-          );
-          if (borderDistance < 26) continue;
-          const angle = grain.angle[index]!;
-          const half = Math.min(
-            12,
-            Math.max(3.5, Math.sqrt(triangle.baseArea) * 0.28),
-          );
-          const dx = Math.cos(angle) * half;
-          const dy = Math.sin(angle) * half;
-          context.strokeStyle = palette.ink[inkIndex]!;
-          context.beginPath();
-          context.moveTo(center.x - dx, center.y - dy);
-          context.lineTo(center.x + dx, center.y + dy);
-          context.stroke();
+          if (inkIndex > 0) {
+            context.strokeStyle = palette.ink[inkIndex]!;
+            context.beginPath();
+            context.moveTo(previous.x, previous.y);
+            context.lineTo(point.x, point.y);
+            context.stroke();
+          }
+          previous = point;
         }
       }
 
       // The creature: one continuous brush stroke, tail melting into
       // the paper, width recorded from its pace when each point was laid.
-      const creature = state.creature;
       const creatureConfig = config.creature;
       if (creature && creatureConfig && creature.points.length > 1) {
         const shortSide = Math.max(
@@ -345,12 +346,39 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
         const maximumWidth = creatureConfig.inkWidthRatio * shortSide;
         const points = creature.points;
         const count = points.length;
+
+        // Old ink BLEEDS: fresh strokes are crisp, but toward the
+        // tail the ink has had time to soak into the fibres - a wide
+        // pale halo swells under the aging half of the body while the
+        // core stays thin. Age blurs; the crease line will inherit
+        // the sharpness.
         context.globalAlpha = 1;
+        for (let index = 1; index < count; index += 1) {
+          const arc = index / (count - 1);
+          if (arc > 0.6) break;
+          const bleed = (0.6 - arc) / 0.6;
+          const from = points[index - 1]!;
+          const to = points[index]!;
+          const melt = clamp(arc / 0.18);
+          const haloIndex = Math.round(
+            (0.08 + 0.16 * melt) * (INK_LUT_STEPS - 1),
+          );
+          if (haloIndex === 0) continue;
+          context.strokeStyle = palette.ink[haloIndex]!;
+          context.lineWidth =
+            maximumWidth * (1.1 + 3.4 * bleed) * to.widthFactor;
+          context.beginPath();
+          context.moveTo(from.x, from.y);
+          context.lineTo(to.x, to.y);
+          context.stroke();
+        }
+
         for (let index = 1; index < count; index += 1) {
           const from = points[index - 1]!;
           const to = points[index]!;
           const arc = index / (count - 1);
-          // Tail fades into paper over the first quarter of the body.
+          // Tail fades into paper over the first quarter of the body,
+          // and its core thins as the bleed halo takes over the mass.
           const fade = clamp(arc / 0.25);
           const inkIndex = Math.min(
             INK_LUT_STEPS - 1,
@@ -358,10 +386,11 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           );
           if (inkIndex === 0) continue;
           const taper = clamp(arc / 0.06) * (0.55 + 0.45 * clamp((1 - arc) / 0.045));
+          const soak = 1 - 0.45 * clamp((0.6 - arc) / 0.6);
           context.strokeStyle = palette.ink[inkIndex]!;
           context.lineWidth = Math.max(
             0.4,
-            maximumWidth * to.widthFactor * taper,
+            maximumWidth * to.widthFactor * taper * soak,
           );
           context.beginPath();
           context.moveTo(from.x, from.y);

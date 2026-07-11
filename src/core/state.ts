@@ -153,6 +153,18 @@ export interface CreaturePointState {
 }
 
 /**
+ * One vertex of the settled crease trail: where the body once passed,
+ * the gathered seam dries into a thin sharp fold line. It surfaces
+ * only after the fresh crumple has relaxed, then stays for a long
+ * time - the desk slowly accumulates a map of where the line lived.
+ */
+export interface CreaseTrailPointState {
+  x: number;
+  y: number;
+  bornAt: number;
+}
+
+/**
  * A single line-creature that roams the sheet. It is the only actor:
  * its path dents the terrain, and the pointer only ever talks to it.
  */
@@ -203,24 +215,15 @@ export interface CreatureState {
    * the easier the next lull becomes one - rest is rare but findable.
    */
   restPressure: number;
-}
-
-/**
- * A direction living on every triangle: the sheet's grain. Chaotic
- * and nearly invisible at rest, it is COMBED into alignment by the
- * creature's body (and by a dragging pointer), then slowly loosens
- * back into noise. The line's power over space is direction.
- */
-export interface GrainFieldState {
-  /** Orientation per triangle, radians in [0, PI). */
-  angle: Float32Array;
-  /** 0..1 combed alignment; 0 reads as loose chaos. */
-  align: Float32Array;
   /**
-   * 0..1 how much of the alignment was combed by the pointer; the
-   * creature only treats strongly hand-combed grain as a message.
+   * The long past: sampled path vertices that settle into faint sharp
+   * crease lines. Bounded by count; the oldest quietly drop off.
    */
-  handmark: Float32Array;
+  creaseTrail: CreaseTrailPointState[];
+  /**
+   * Distance since the last crease-trail sample.
+   */
+  creaseTrailDistance: number;
 }
 
 export interface TopologyState {
@@ -238,7 +241,6 @@ export interface SimulationState {
   viewport: Viewport;
   time: TimeState;
   creature?: CreatureState;
-  grain?: GrainFieldState;
 }
 
 export function createEmptySimulationState(viewport: Viewport): SimulationState {
