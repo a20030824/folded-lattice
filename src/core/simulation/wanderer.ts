@@ -230,10 +230,12 @@ export const wandererSystem: SimulationSystem = {
       creature.retractTimer = 0;
     }
 
-    // The ground profile is a narrow groove with a weak RAISED shoulder
-    // beside it - displaced paper piles up at the rim, it does not just
-    // dent shallower. The line sits in the valley it made, between two
-    // soft ridges. Resting presses the nest deeper.
+    // The ground interaction: the body does not just stamp depth, it
+    // DISPLACES the sheet. Nodes under the line are pressed down and
+    // pushed sideways off the path; the spring weave piles the pushed
+    // material into a rim on its own, and the fine mesh wrinkles
+    // around the groove instead of shading a prescribed profile.
+    // Resting presses the nest deeper.
     if (settings.carveStrength > 0) {
       const count = creature.points.length;
       const grooveRadius = Math.max(1, settings.carveRadiusRatio * shortSide * 0.55);
@@ -244,12 +246,20 @@ export const wandererSystem: SimulationSystem = {
         if (node.pinned) continue;
         let down = 0;
         let ridge = 0;
+        let nearestSquared = Infinity;
+        let nearestDx = 0;
+        let nearestDy = 0;
         for (let back = 0; back < 28 && back < count; back += 4) {
           const point = creature.points[count - 1 - back]!;
           const dx = node.position.x - point.x;
           const dy = node.position.y - point.y;
           const distanceSquared = dx * dx + dy * dy;
           if (distanceSquared > rejectSquared) continue;
+          if (distanceSquared < nearestSquared) {
+            nearestSquared = distanceSquared;
+            nearestDx = dx;
+            nearestDy = dy;
+          }
           const groove = Math.exp(-distanceSquared / (grooveRadius * grooveRadius));
           const shoulder = Math.exp(
             -distanceSquared / (shoulderRadius * shoulderRadius),
@@ -260,6 +270,18 @@ export const wandererSystem: SimulationSystem = {
         }
         if (down > 0.01 || ridge > 0.01) {
           node.force.z -= strength * (down - ridge * 0.4);
+          // The line GATHERS the sheet like a thread pulled through
+          // cloth: wall nodes are drawn toward the path, and the weave
+          // puckers into a seam along it. Peaks on the groove wall
+          // (down = 0.5), vanishing at the center where the direction
+          // is undefined.
+          const nearestDistance = Math.sqrt(nearestSquared);
+          if (nearestDistance > 0.5) {
+            const gather =
+              strength * 0.45 * down * (1 - down) * 4;
+            node.force.x -= (nearestDx / nearestDistance) * gather;
+            node.force.y -= (nearestDy / nearestDistance) * gather;
+          }
         }
       }
     }

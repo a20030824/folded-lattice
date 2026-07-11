@@ -11,8 +11,10 @@ import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
 
 const config: FoldedLatticeConfig = {
   topology: {
-    nodeCount: 260,
-    minimumDistanceRatio: 0.045,
+    // Dense weave (judge's call): fine facets so the relief reads as
+    // paper grain, not a coarse crystal cloud.
+    nodeCount: 620,
+    minimumDistanceRatio: 0.028,
     marginRatio: 0.04,
     pinBoundary: true,
     randomSeed: 7351,
@@ -60,7 +62,7 @@ const config: FoldedLatticeConfig = {
     edgeRestLengthInfluence: 0,
     // Where the creature walks often, the paper stays creased longer.
     triangleAccumulationRate: 0.04,
-    triangleDecayRate: 0.006,
+    triangleDecayRate: 0.012,
     maximumMemory: 0.6,
   },
   // Unused by the ink renderer; present to satisfy the shared config.
@@ -123,7 +125,7 @@ const config: FoldedLatticeConfig = {
     pointerRepelTurnRate: 5,
     pointerSpeedBoost: 1.2,
     carveStrength: 46,
-    carveRadiusRatio: 0.075,
+    carveRadiusRatio: 0.065,
     inkWidthRatio: 0.005,
   },
 };
