@@ -329,44 +329,53 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           context.stroke();
         }
 
-        // The head always carries a small pool of gathered ink - which
-        // end is feeling the world is never a guess. It swells into a
-        // drop while resting, and it is a puddle, not a circle: eight
-        // noise-wobbled lobes, slowly breathing.
-        const headPoint = points[count - 1]!;
-        const dropRadius =
-          maximumWidth *
-          (0.55 + 0.35 * headPoint.widthFactor + 1.7 * creature.restPool);
-        const wobbleAmplitude = 0.1 + 0.24 * creature.restPool;
-        const drift = state.time.elapsed * 0.3;
-        context.fillStyle = palette.ink[INK_LUT_STEPS - 1]!;
-        context.beginPath();
-        let previousX = 0;
-        let previousY = 0;
-        let firstX = 0;
-        let firstY = 0;
-        for (let lobe = 0; lobe <= 8; lobe += 1) {
-          const index = lobe % 8;
-          const angle = (index / 8) * Math.PI * 2;
-          const wobble =
-            1 + wobbleAmplitude * (valueNoise2D(index * 3.17 + drift, index * 1.71) - 0.5) * 2;
-          const x = headPoint.x + Math.cos(angle) * dropRadius * wobble;
-          const y = headPoint.y + Math.sin(angle) * dropRadius * wobble;
-          if (lobe === 0) {
-            firstX = x;
-            firstY = y;
-          } else {
-            const midX = (previousX + x) * 0.5;
-            const midY = (previousY + y) * 0.5;
-            if (lobe === 1) context.moveTo(midX, midY);
-            else context.quadraticCurveTo(previousX, previousY, midX, midY);
+        // Only a resting head pools into a drop of ink - a moving line
+        // stays a pure line (the judge vetoed a permanent head). The
+        // drop is a puddle, not a circle: eight noise-wobbled lobes,
+        // slowly breathing.
+        if (creature.restPool > 0.05) {
+          const headPoint = points[count - 1]!;
+          const dropRadius =
+            maximumWidth * (0.5 + 1.8 * creature.restPool);
+          const wobbleAmplitude = 0.1 + 0.24 * creature.restPool;
+          const drift = state.time.elapsed * 0.3;
+          context.fillStyle = palette.ink[INK_LUT_STEPS - 1]!;
+          context.beginPath();
+          let previousX = 0;
+          let previousY = 0;
+          let firstX = 0;
+          let firstY = 0;
+          for (let lobe = 0; lobe <= 8; lobe += 1) {
+            const index = lobe % 8;
+            const angle = (index / 8) * Math.PI * 2;
+            const wobble =
+              1 +
+              wobbleAmplitude *
+                (valueNoise2D(index * 3.17 + drift, index * 1.71) - 0.5) *
+                2;
+            const x = headPoint.x + Math.cos(angle) * dropRadius * wobble;
+            const y = headPoint.y + Math.sin(angle) * dropRadius * wobble;
+            if (lobe === 0) {
+              firstX = x;
+              firstY = y;
+            } else {
+              const midX = (previousX + x) * 0.5;
+              const midY = (previousY + y) * 0.5;
+              if (lobe === 1) context.moveTo(midX, midY);
+              else context.quadraticCurveTo(previousX, previousY, midX, midY);
+            }
+            previousX = x;
+            previousY = y;
           }
-          previousX = x;
-          previousY = y;
+          context.quadraticCurveTo(
+            firstX,
+            firstY,
+            (previousX + firstX) * 0.5,
+            (previousY + firstY) * 0.5,
+          );
+          context.closePath();
+          context.fill();
         }
-        context.quadraticCurveTo(firstX, firstY, (previousX + firstX) * 0.5, (previousY + firstY) * 0.5);
-        context.closePath();
-        context.fill();
       }
 
       context.globalAlpha = 1;
