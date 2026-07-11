@@ -1,6 +1,6 @@
 import type { SimulationSystem } from "../contracts";
 import { clamp, createRandom } from "../math";
-import type { SimulationState } from "../state";
+import type { CreaseFieldState, CreaseState, SimulationState } from "../state";
 import {
   buildCreaseState,
   evaluateCreaseField,
@@ -111,6 +111,39 @@ function spawnFold(
   field.nextCreaseId += 1;
   field.creases.push(crease);
   scratch.dirty = true;
+}
+
+/**
+ * The minor fold whose line passes under the hand, if any. Only settled
+ * folds count: one still growing is not yet something to iron out, and
+ * the major skeleton stays system-owned.
+ */
+function creaseUnderPoint(
+  field: CreaseFieldState,
+  x: number,
+  y: number,
+): CreaseState | null {
+  let best: CreaseState | null = null;
+  let bestDistanceSquared = Number.POSITIVE_INFINITY;
+  for (const crease of field.creases) {
+    if (crease.kind !== "minor") continue;
+    if (crease.strength < 0.08 || crease.growth < 0.6) continue;
+    if (x < crease.minX || x > crease.maxX || y < crease.minY || y > crease.maxY) {
+      continue;
+    }
+    const reach = crease.widthRatio * field.shortSide;
+    const reachSquared = reach * reach;
+    for (const point of crease.points) {
+      const dx = point.x - x;
+      const dy = point.y - y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared <= reachSquared && distanceSquared < bestDistanceSquared) {
+        bestDistanceSquared = distanceSquared;
+        best = crease;
+      }
+    }
+  }
+  return best;
 }
 
 /**
@@ -277,7 +310,7 @@ export const creaseLifeSystem: SimulationSystem = {
         if (stableMajors.length > 0) {
           const retiring =
             stableMajors[Math.floor(scratch.random() * stableMajors.length)]!;
-          retiring.fadePerSecond = retiring.strength / 60;
+          retiring.fadePerSecond = retiring.strength / 45;
 
           const diagonal = Math.hypot(state.viewport.width, state.viewport.height);
           spawnFold(state, scratch, {
@@ -322,21 +355,33 @@ export const creaseLifeSystem: SimulationSystem = {
         scratch.pressHeld >= life.pressSeconds &&
         elapsed >= scratch.pressCooldownUntil
       ) {
-        const useGesture = elapsed - scratch.lastMoveAt < 4;
-        spawnFold(state, scratch, {
-          originX: pointer.position.x,
-          originY: pointer.position.y,
-          directionX: useGesture ? scratch.lastMoveDirectionX : undefined,
-          directionY: useGesture ? scratch.lastMoveDirectionY : undefined,
-          kind: "minor",
-          sign: -1,
-          strength: 0.9,
-          halfLength: field.shortSide * 0.15,
-          widthRatio: 0.1,
-          growSeconds: life.growSeconds * 0.7,
-          fadePerSecond: 0.9 / (life.fadeSeconds * 1.4),
-          maturitySeconds: life.growSeconds * 3,
-        });
+        // Pressing on an existing fold irons it flat under the hand;
+        // pressing open paper sets a new fold along the last gesture.
+        const under = creaseUnderPoint(
+          field,
+          pointer.position.x,
+          pointer.position.y,
+        );
+        if (under) {
+          under.fadePerSecond = Math.max(under.fadePerSecond, under.strength / 6);
+          scratch.dirty = true;
+        } else {
+          const useGesture = elapsed - scratch.lastMoveAt < 4;
+          spawnFold(state, scratch, {
+            originX: pointer.position.x,
+            originY: pointer.position.y,
+            directionX: useGesture ? scratch.lastMoveDirectionX : undefined,
+            directionY: useGesture ? scratch.lastMoveDirectionY : undefined,
+            kind: "minor",
+            sign: -1,
+            strength: 0.9,
+            halfLength: field.shortSide * 0.15,
+            widthRatio: 0.1,
+            growSeconds: life.growSeconds * 0.7,
+            fadePerSecond: 0.9 / (life.fadeSeconds * 1.4),
+            maturitySeconds: life.growSeconds * 3,
+          });
+        }
         scratch.pressFired = true;
         scratch.pressCooldownUntil = elapsed + 6;
       }
