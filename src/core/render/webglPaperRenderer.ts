@@ -46,6 +46,10 @@ uniform vec2 uResolution;
 uniform float uAspect;
 uniform float uGrain;
 uniform float uSheen;
+uniform sampler2D uTransitionSnapshot;
+uniform sampler2D uTransitionMask;
+uniform float uTransitionActive;
+uniform float uTransitionProgress;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -99,6 +103,18 @@ void main() {
   // Vignette settles into the same shadow air instead of black.
   float centerDistance = distance(vUv * vec2(uAspect, 1.0), vec2(0.5 * uAspect, 0.5));
   color = mix(color, uShadowTint * 0.85, smoothstep(0.44, 1.1, centerDistance) * 0.3);
+
+  // A topology handover keeps the old sheet only where the new crease
+  // has not yet claimed it. The snapshot is never a second paper for
+  // long: it melts away globally while the growing rail clears a local
+  // path from its birth point outward.
+  if (uTransitionActive > 0.5) {
+    vec2 textureUv = vec2(vUv.x, 1.0 - vUv.y);
+    float localReveal = texture2D(uTransitionMask, textureUv).a;
+    float oldAlpha = (1.0 - uTransitionProgress) * (1.0 - localReveal);
+    vec3 oldColor = texture2D(uTransitionSnapshot, textureUv).rgb;
+    color = mix(color, oldColor, oldAlpha);
+  }
 
   gl_FragColor = vec4(color, 1.0);
 }
@@ -157,6 +173,13 @@ interface MeshBinding {
  * facet). Paper facets stay slightly planar; 1.0 would read as soft cloth.
  */
 const NORMAL_SMOOTHING = 0.78;
+const TOPOLOGY_HANDOVER_SECONDS = 0.72;
+const TRANSITION_MASK_SCALE = 0.28;
+
+interface TopologyTransition {
+  startedAt: number;
+  creaseId: number | null;
+}
 
 function buildMeshBinding(topology: TopologyState): MeshBinding {
   const { nodes, edges, triangles, creaseEdges } = topology;
@@ -314,14 +337,58 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     aspect: gl.getUniformLocation(program, "uAspect"),
     grain: gl.getUniformLocation(program, "uGrain"),
     sheen: gl.getUniformLocation(program, "uSheen"),
+    transitionSnapshot: gl.getUniformLocation(program, "uTransitionSnapshot"),
+    transitionMask: gl.getUniformLocation(program, "uTransitionMask"),
+    transitionActive: gl.getUniformLocation(program, "uTransitionActive"),
+    transitionProgress: gl.getUniformLocation(program, "uTransitionProgress"),
   };
 
   const positionBuffer = gl.createBuffer();
   const normalBuffer = gl.createBuffer();
   const occlusionBuffer = gl.createBuffer();
+  const transitionSnapshot = gl.createTexture();
+  const transitionMask = gl.createTexture();
+  if (!transitionSnapshot || !transitionMask) {
+    throw new Error("Failed to create paper transition textures.");
+  }
 
   let viewport: Viewport = { width: 1, height: 1, devicePixelRatio: 1 };
   let mesh: MeshBinding | null = null;
+  let transition: TopologyTransition | null = null;
+  const transitionMaskCanvas = document.createElement("canvas");
+  const transitionMaskContext = transitionMaskCanvas.getContext("2d")!;
+
+  const configureTexture = (texture: WebGLTexture): void => {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  };
+  configureTexture(transitionSnapshot);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    1,
+    1,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    new Uint8Array([0, 0, 0, 255]),
+  );
+  configureTexture(transitionMask);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    1,
+    1,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    new Uint8Array([0, 0, 0, 0]),
+  );
 
   const uploadStatic = (): void => {
     if (!mesh) return;
@@ -467,6 +534,77 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     }
   };
 
+  const beginTopologyTransition = (state: Readonly<SimulationState>): void => {
+    // The prior frame is the outgoing paper. Copying it before buffers are
+    // rebound avoids maintaining a second live simulation just for a brief
+    // visual handover.
+    configureTexture(transitionSnapshot);
+    gl.copyTexImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+      0,
+    );
+    const field = state.topology.creaseField;
+    const newborn = field?.creases.reduce<CreaseState | null>(
+      (latest, crease) =>
+        crease.age < 0.2 && (!latest || crease.id > latest.id) ? crease : latest,
+      null,
+    );
+    transition = {
+      startedAt: state.time.elapsed,
+      creaseId: newborn?.id ?? null,
+    };
+  };
+
+  const updateTransitionMask = (
+    state: Readonly<SimulationState>,
+    activeTransition: TopologyTransition,
+  ): void => {
+    const width = Math.max(2, Math.round(viewport.width * TRANSITION_MASK_SCALE));
+    const height = Math.max(2, Math.round(viewport.height * TRANSITION_MASK_SCALE));
+    if (transitionMaskCanvas.width !== width || transitionMaskCanvas.height !== height) {
+      transitionMaskCanvas.width = width;
+      transitionMaskCanvas.height = height;
+    }
+    transitionMaskContext.setTransform(
+      TRANSITION_MASK_SCALE,
+      0,
+      0,
+      TRANSITION_MASK_SCALE,
+      0,
+      0,
+    );
+    transitionMaskContext.clearRect(0, 0, viewport.width, viewport.height);
+
+    const field = state.topology.creaseField;
+    const crease = field?.creases.find((item) => item.id === activeTransition.creaseId);
+    if (field && crease) {
+      // A soft band is revealed from the press point out along both arms.
+      // The band is intentionally wider than the eventual sharp rail: it
+      // lets the old facets melt before the new normal split becomes legible.
+      const radius = field.shortSide * 0.09;
+      for (const point of crease.points) {
+        const alpha = clamp((crease.growth - point.fromOrigin + 0.15) / 0.15);
+        if (alpha <= 0) continue;
+        transitionMaskContext.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        transitionMaskContext.beginPath();
+        transitionMaskContext.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        transitionMaskContext.fill();
+      }
+    }
+
+    gl.activeTexture(gl.TEXTURE1);
+    configureTexture(transitionMask);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, transitionMaskCanvas);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  };
+
   return {
     resize(nextViewport, maximumDevicePixelRatio) {
       viewport = nextViewport;
@@ -487,6 +625,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       if (state.topology.triangles.length === 0) return;
 
       if (!mesh || mesh.topology !== state.topology) {
+        if (mesh) beginTopologyTransition(state);
         mesh = buildMeshBinding(state.topology);
         uploadStatic();
       }
@@ -528,6 +667,24 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       gl.uniform1f(uniforms.grain, settings.grainOpacity * 0.32);
       gl.uniform1f(uniforms.sheen, settings.ridgeLightStrength * 0.12);
 
+      let transitionProgress = 1;
+      if (transition) {
+        transitionProgress = clamp(
+          (state.time.elapsed - transition.startedAt) / TOPOLOGY_HANDOVER_SECONDS,
+        );
+        if (transitionProgress >= 1) {
+          transition = null;
+        }
+      }
+      const transitionActive = transition !== null;
+      if (transition) updateTransitionMask(state, transition);
+      gl.activeTexture(gl.TEXTURE0);
+      configureTexture(transitionSnapshot);
+      gl.uniform1i(uniforms.transitionSnapshot, 0);
+      gl.uniform1i(uniforms.transitionMask, 1);
+      gl.uniform1f(uniforms.transitionActive, transitionActive ? 1 : 0);
+      gl.uniform1f(uniforms.transitionProgress, transitionProgress);
+
       gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, mesh.positions);
       gl.enableVertexAttribArray(attributes.position);
@@ -550,6 +707,8 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       gl.deleteBuffer(positionBuffer);
       gl.deleteBuffer(normalBuffer);
       gl.deleteBuffer(occlusionBuffer);
+      gl.deleteTexture(transitionSnapshot);
+      gl.deleteTexture(transitionMask);
       gl.deleteProgram(program);
       canvas.width = 1;
       canvas.height = 1;
