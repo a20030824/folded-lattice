@@ -152,17 +152,6 @@ export interface CreaturePointState {
   widthFactor: number;
 }
 
-/**
- * One vertex of the settled crease trail: where the body once passed,
- * the gathered seam dries into a thin sharp fold line. It surfaces
- * only after the fresh crumple has relaxed, then stays for a long
- * time - the desk slowly accumulates a map of where the line lived.
- */
-export interface CreaseTrailPointState {
-  x: number;
-  y: number;
-  bornAt: number;
-}
 
 /**
  * A single line-creature that roams the sheet. It is the only actor:
@@ -215,15 +204,6 @@ export interface CreatureState {
    * the easier the next lull becomes one - rest is rare but findable.
    */
   restPressure: number;
-  /**
-   * The long past: sampled path vertices that settle into faint sharp
-   * crease lines. Bounded by count; the oldest quietly drop off.
-   */
-  creaseTrail: CreaseTrailPointState[];
-  /**
-   * Distance since the last crease-trail sample.
-   */
-  creaseTrailDistance: number;
 }
 
 export interface TopologyState {
@@ -241,6 +221,12 @@ export interface SimulationState {
   viewport: Viewport;
   time: TimeState;
   creature?: CreatureState;
+  /**
+   * Ink soaked into the lattice, one level per edge: the triangle
+   * edges are the paper's fibres, and ink left by the passing body
+   * wicks slowly outward along them, fading as it travels.
+   */
+  edgeInk?: Float32Array;
 }
 
 export function createEmptySimulationState(viewport: Viewport): SimulationState {

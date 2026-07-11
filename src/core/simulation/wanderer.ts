@@ -56,8 +56,6 @@ function createCreature(state: SimulationState, seed: number): CreatureState {
     restAnchorX: x,
     restAnchorY: y,
     restHeading: hash * Math.PI * 2,
-    creaseTrail: [],
-    creaseTrailDistance: 0,
   };
 }
 
@@ -220,16 +218,6 @@ export const wandererSystem: SimulationSystem = {
           (1 + FLEE_LENGTH_BOOST * creature.fear),
       ),
     );
-
-    // The long past: sampled every few px, the path later dries into
-    // a faint sharp crease line (rendered once the crumple relaxes).
-    // Bounded by count, so the oldest folds quietly leave the map.
-    creature.creaseTrailDistance += Math.hypot(headX - head.x, headY - head.y);
-    if (creature.creaseTrailDistance >= 12) {
-      creature.creaseTrailDistance = 0;
-      creature.creaseTrail.push({ x: headX, y: headY, bornAt: time });
-      if (creature.creaseTrail.length > 4800) creature.creaseTrail.shift();
-    }
 
     // Lay body samples at fixed spacing; slow travel widens the stroke.
     const spacing = Math.max(1, settings.segmentSpacingRatio * shortSide);
