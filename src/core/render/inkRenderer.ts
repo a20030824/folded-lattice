@@ -1,5 +1,5 @@
 ﻿import type { Renderer } from "../contracts";
-import { clamp, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
+import { clamp, mixRgb, parseColor, rgbString } from "../math";
 import type { Rgb } from "../math";
 import type { Viewport } from "../types";
 
@@ -328,67 +328,9 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           context.lineTo(to.x, to.y);
           context.stroke();
         }
-
-        // Only a resting head pools into a drop of ink - a moving line
-        // stays a pure line (the judge vetoed a permanent head). The
-        // blot is not a wobbled circle: it soaks backward from the
-        // sleeping point along the body's arrival direction, curling
-        // the way the rest curls, so its shape is the rest itself.
-        if (creature.restPool > 0.05) {
-          const baseRadius =
-            maximumWidth * (0.55 + 1.5 * creature.restPool);
-          const blotCount = 5;
-          context.fillStyle = palette.ink[INK_LUT_STEPS - 1]!;
-          context.beginPath();
-          let blotX = creature.restAnchorX;
-          let blotY = creature.restAnchorY;
-          let direction = creature.restHeading + Math.PI;
-          for (let index = 0; index < blotCount; index += 1) {
-            // Lobes surface one after another as the rest settles.
-            const reveal = clamp(
-              creature.restPool * (blotCount + 1) - index,
-            );
-            if (reveal <= 0) break;
-            const wobble =
-              valueNoise2D(
-                creature.restAnchorX * 0.031 + index * 5.13,
-                creature.restAnchorY * 0.031 + index * 2.71,
-              ) - 0.5;
-            const radius =
-              baseRadius *
-              (1 - index * 0.15) *
-              (0.6 + 0.4 * reveal) *
-              (1 + wobble * 0.24);
-            const offsetX =
-              (valueNoise2D(
-                index * 7.7 + creature.restAnchorX * 0.017,
-                index * 3.3,
-              ) -
-                0.5) *
-              radius *
-              0.5;
-            const offsetY =
-              (valueNoise2D(
-                index * 9.1,
-                index * 4.9 + creature.restAnchorY * 0.017,
-              ) -
-                0.5) *
-              radius *
-              0.5;
-            context.moveTo(blotX + offsetX + radius, blotY + offsetY);
-            context.arc(
-              blotX + offsetX,
-              blotY + offsetY,
-              radius,
-              0,
-              Math.PI * 2,
-            );
-            blotX += Math.cos(direction) * radius * 0.85;
-            blotY += Math.sin(direction) * radius * 0.85;
-            direction += creature.restSign * 0.5;
-          }
-          context.fill();
-        }
+        // No extra object at rest: the "puddle" is the line itself,
+        // laid down thick while it winds into a coil (judge's call -
+        // the earlier painted blot never read as part of the body).
       }
 
       context.globalAlpha = 1;

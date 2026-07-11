@@ -13,8 +13,19 @@ const FEAR_DECAY_PER_SECOND = 1 / 2.4;
  */
 const FLEE_LENGTH_BOOST = 1.4;
 const REST_LENGTH_FACTOR = 0.5;
-const REST_SPEED_FACTOR = 0.07;
+/**
+ * Resting is not standing still: the head keeps crawling at a small
+ * fraction of pace while turning steadily, so the line WINDS ITSELF
+ * into a coil - the "puddle" is the body, thickened, not an extra
+ * drawn object (judge's call).
+ */
+const REST_SPEED_FACTOR = 0.18;
 const REST_TURN_RATE = 1.5;
+/**
+ * How much the stroke fattens at full rest; baked into the points as
+ * they are laid, so only the coiled part of the body is heavy.
+ */
+const REST_GIRTH_BOOST = 1.3;
 
 /**
  * Shortest signed angle from `from` to `to`.
@@ -143,8 +154,14 @@ export const wandererSystem: SimulationSystem = {
       (valueNoise2D(time * 0.17 + seed * 7.7, 41.3 + seed) - 0.5) *
       2 *
       settings.wanderStrength;
+    // The coil tightens as the rest deepens (same speed, more turn =
+    // smaller radius), wobbling slightly so the rings do not stack
+    // into a perfect circle.
     let turn = resting
-      ? creature.restSign * REST_TURN_RATE * (0.4 + creature.restPool)
+      ? creature.restSign *
+        REST_TURN_RATE *
+        (0.4 + creature.restPool) *
+        (0.85 + 0.3 * valueNoise2D(time * 0.4, seed * 9.1))
       : drift;
     turn += escapeTurn;
 
@@ -215,7 +232,13 @@ export const wandererSystem: SimulationSystem = {
         0.4,
         1,
       );
-      creature.points.push({ x: headX, y: headY, widthFactor: slowness });
+      // Rest fattens the stroke as it is laid: the winding coil grows
+      // heavy with ink while the walking parts of the trail stay thin.
+      const girth = Math.min(
+        2.1,
+        slowness * (1 + REST_GIRTH_BOOST * creature.restPool),
+      );
+      creature.points.push({ x: headX, y: headY, widthFactor: girth });
       while (creature.points.length > targetLength) creature.points.shift();
     }
     // Visible retraction: while too long (resting), the tail is drawn
@@ -241,7 +264,9 @@ export const wandererSystem: SimulationSystem = {
       const grooveRadius = Math.max(1, settings.carveRadiusRatio * shortSide * 0.55);
       const shoulderRadius = grooveRadius * 2.4;
       const rejectSquared = shoulderRadius * shoulderRadius * 9;
-      const strength = settings.carveStrength * (1 + creature.restPool * 1.2);
+      // Rest presses only gently harder: the nest should read as a
+      // soft dimple under the coil, not a starburst pucker.
+      const strength = settings.carveStrength * (1 + creature.restPool * 0.5);
       for (const node of state.topology.nodes) {
         if (node.pinned) continue;
         let down = 0;
