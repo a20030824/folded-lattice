@@ -1,6 +1,6 @@
 import type { Renderer } from "../contracts";
 import { clamp, parseColor } from "../math";
-import type { SimulationState, TopologyState } from "../state";
+import type { CreaseState, SimulationState, TopologyState } from "../state";
 import type { Viewport } from "../types";
 
 /**
@@ -124,12 +124,28 @@ interface MeshBinding {
   normals: Float32Array;
   occlusions: Float32Array;
   /**
-   * For each vertex (triangle corner): offset/count into smoothingGroups,
-   * listing the triangle indices whose face normals average into it.
+   * For each vertex (triangle corner): offset/count into smoothingGroups
+   * for FULL smoothing (average across every adjacent facet, folds
+   * ignored) - the soft end of the sharpness blend.
    */
-  groupOffsets: Int32Array;
-  groupCounts: Int32Array;
+  groupAllOffsets: Int32Array;
+  groupAllCounts: Int32Array;
+  /**
+   * Offset/count for SAME-SIDE smoothing (only facets on this corner's
+   * side of the crease line) - the sharp end of the blend. Non-crease
+   * vertices alias their full-smoothing range.
+   */
+  groupSideOffsets: Int32Array;
+  groupSideCounts: Int32Array;
   smoothingGroups: Int32Array;
+  /**
+   * Living crease each vertex sits on (-1 for open paper) and its
+   * normalized distance from that crease's origin: together they give
+   * the per-frame sharpness, so a fold sharpens as it grows past the
+   * vertex and softens as it heals - never binary.
+   */
+  vertexCreaseId: Int32Array;
+  vertexFromOrigin: Float32Array;
   cornerNodes: Int32Array;
   faceNormals: Float32Array;
   nodeOcclusion: Float32Array;
@@ -184,8 +200,12 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
     return cross >= 0 ? 1 : -1;
   };
 
-  const groupOffsets = new Int32Array(vertexCount);
-  const groupCounts = new Int32Array(vertexCount);
+  const groupAllOffsets = new Int32Array(vertexCount);
+  const groupAllCounts = new Int32Array(vertexCount);
+  const groupSideOffsets = new Int32Array(vertexCount);
+  const groupSideCounts = new Int32Array(vertexCount);
+  const vertexCreaseId = new Int32Array(vertexCount);
+  const vertexFromOrigin = new Float32Array(vertexCount);
   const cornerNodes = new Int32Array(vertexCount);
   const groups: number[] = [];
 
@@ -196,15 +216,19 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
       const vertex = triangleIndex * 3 + corner;
       const nodeIndex = corners[corner]!;
       cornerNodes[vertex] = nodeIndex;
-      groupOffsets[vertex] = groups.length;
 
       const node = nodes[nodeIndex]!;
-      if (!creaseDirection.has(nodeIndex)) {
-        for (const adjacent of node.triangleIndices) groups.push(adjacent);
-        groupCounts[vertex] = node.triangleIndices.length;
-      } else {
-        // Split the smoothing group across the crease line.
+      groupAllOffsets[vertex] = groups.length;
+      for (const adjacent of node.triangleIndices) groups.push(adjacent);
+      groupAllCounts[vertex] = node.triangleIndices.length;
+
+      const tag = node.creaseTag;
+      if (tag && creaseDirection.has(nodeIndex)) {
+        vertexCreaseId[vertex] = tag.creaseId;
+        vertexFromOrigin[vertex] = tag.fromOrigin;
+        // The same-side group: smoothing that refuses to cross the fold.
         const side = centroidSide(triangleIndex, nodeIndex);
+        groupSideOffsets[vertex] = groups.length;
         let count = 0;
         for (const adjacent of node.triangleIndices) {
           if (centroidSide(adjacent, nodeIndex) === side) {
@@ -216,7 +240,12 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
           groups.push(triangleIndex);
           count = 1;
         }
-        groupCounts[vertex] = count;
+        groupSideCounts[vertex] = count;
+      } else {
+        vertexCreaseId[vertex] = -1;
+        vertexFromOrigin[vertex] = 0;
+        groupSideOffsets[vertex] = groupAllOffsets[vertex]!;
+        groupSideCounts[vertex] = groupAllCounts[vertex]!;
       }
     }
   }
@@ -237,9 +266,13 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
     positions: new Float32Array(vertexCount * 2),
     normals: new Float32Array(vertexCount * 3),
     occlusions: new Float32Array(vertexCount),
-    groupOffsets,
-    groupCounts,
+    groupAllOffsets,
+    groupAllCounts,
+    groupSideOffsets,
+    groupSideCounts,
     smoothingGroups: Int32Array.from(groups),
+    vertexCreaseId,
+    vertexFromOrigin,
     cornerNodes,
     faceNormals: new Float32Array(triangles.length * 3),
     nodeOcclusion: new Float32Array(nodes.length),
@@ -305,9 +338,20 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     const { nodes, triangles } = state.topology;
     const {
       positions, normals, occlusions, faceNormals,
-      groupOffsets, groupCounts, smoothingGroups, cornerNodes,
+      groupAllOffsets, groupAllCounts, groupSideOffsets, groupSideCounts,
+      smoothingGroups, vertexCreaseId, vertexFromOrigin, cornerNodes,
       nodeOcclusion, nodeAverageEdge,
     } = mesh;
+
+    // Sharpness is read from the LIVING creases every frame, not from a
+    // snapshot: a growing fold sharpens outward from its origin, a
+    // healing fold softens everywhere, and a rail whose crease is gone
+    // simply smooths like open paper.
+    const creaseById = new Map<number, CreaseState>();
+    const field = state.topology.creaseField;
+    if (field) {
+      for (const crease of field.creases) creaseById.set(crease.id, crease);
+    }
 
     // Face normals, flipped to point at the viewer.
     for (let index = 0; index < triangles.length; index += 1) {
@@ -355,22 +399,61 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
         positions[vertex * 2 + 1] =
           node.position.y - node.position.z * depthProjection * 0.72;
 
+        // Per-frame crease sharpness for this vertex: strength times a
+        // growth window advancing outward from the fold's origin.
+        let sharpness = 0;
+        const creaseId = vertexCreaseId[vertex]!;
+        if (creaseId >= 0) {
+          const crease = creaseById.get(creaseId);
+          if (crease) {
+            sharpness =
+              clamp(crease.strength * 1.4) *
+              clamp((crease.growth - vertexFromOrigin[vertex]!) / 0.12);
+          }
+        }
+
         let smoothX = 0;
         let smoothY = 0;
         let smoothZ = 0;
-        const offset = groupOffsets[vertex]!;
-        const count = groupCounts[vertex]!;
-        for (let member = 0; member < count; member += 1) {
-          const face = smoothingGroups[offset + member]!;
-          smoothX += faceNormals[face * 3]!;
-          smoothY += faceNormals[face * 3 + 1]!;
-          smoothZ += faceNormals[face * 3 + 2]!;
+        if (sharpness < 0.999) {
+          const offset = groupAllOffsets[vertex]!;
+          const count = groupAllCounts[vertex]!;
+          for (let member = 0; member < count; member += 1) {
+            const face = smoothingGroups[offset + member]!;
+            smoothX += faceNormals[face * 3]!;
+            smoothY += faceNormals[face * 3 + 1]!;
+            smoothZ += faceNormals[face * 3 + 2]!;
+          }
+          const length = Math.max(1e-6, Math.hypot(smoothX, smoothY, smoothZ));
+          smoothX /= length;
+          smoothY /= length;
+          smoothZ /= length;
         }
-        const smoothLength = Math.max(1e-6, Math.hypot(smoothX, smoothY, smoothZ));
+        if (sharpness > 0.001) {
+          let sideX = 0;
+          let sideY = 0;
+          let sideZ = 0;
+          const offset = groupSideOffsets[vertex]!;
+          const count = groupSideCounts[vertex]!;
+          for (let member = 0; member < count; member += 1) {
+            const face = smoothingGroups[offset + member]!;
+            sideX += faceNormals[face * 3]!;
+            sideY += faceNormals[face * 3 + 1]!;
+            sideZ += faceNormals[face * 3 + 2]!;
+          }
+          const length = Math.max(1e-6, Math.hypot(sideX, sideY, sideZ));
+          smoothX += (sideX / length - smoothX) * sharpness;
+          smoothY += (sideY / length - smoothY) * sharpness;
+          smoothZ += (sideZ / length - smoothZ) * sharpness;
+          const blended = Math.max(1e-6, Math.hypot(smoothX, smoothY, smoothZ));
+          smoothX /= blended;
+          smoothY /= blended;
+          smoothZ /= blended;
+        }
 
-        let x = (smoothX / smoothLength) * NORMAL_SMOOTHING + flatX * (1 - NORMAL_SMOOTHING);
-        let y = (smoothY / smoothLength) * NORMAL_SMOOTHING + flatY * (1 - NORMAL_SMOOTHING);
-        let z = (smoothZ / smoothLength) * NORMAL_SMOOTHING + flatZ * (1 - NORMAL_SMOOTHING);
+        let x = smoothX * NORMAL_SMOOTHING + flatX * (1 - NORMAL_SMOOTHING);
+        let y = smoothY * NORMAL_SMOOTHING + flatY * (1 - NORMAL_SMOOTHING);
+        let z = smoothZ * NORMAL_SMOOTHING + flatZ * (1 - NORMAL_SMOOTHING);
         const length = Math.max(1e-6, Math.hypot(x, y, z));
         x /= length;
         y /= length;

@@ -13,6 +13,12 @@ export interface NodeState {
   pinned: boolean;
   edgeIndices: number[];
   triangleIndices: number[];
+  /**
+   * Set when this node sits on a crease rail: which living crease, and
+   * how far from its origin (0..1). Renderers use it to split and
+   * gradate normal smoothing per frame.
+   */
+  creaseTag?: { creaseId: number; fromOrigin: number };
 }
 
 export interface EdgeState {
@@ -75,7 +81,22 @@ export interface FieldState {
 export interface CreaseEdgeState {
   edgeIndex: number;
   sign: 1 | -1;
+  /**
+   * Strength at rail-build time. Surface renderers should NOT trust this
+   * snapshot: look the living crease up by creaseId and use its current
+   * strength/growth, so sharpness can fade with the fold.
+   */
   strength: number;
+  /**
+   * The living crease this rail segment belongs to; may no longer exist
+   * in the field (a healed fold whose rail awaits garbage collection).
+   */
+  creaseId: number;
+  /**
+   * Normalized distance of this edge from the crease origin (0 under the
+   * event point, 1 at the farther tip) - growth gates sharpness with it.
+   */
+  fromOrigin: number;
   triangleA: number;
   triangleB: number;
 }
@@ -84,10 +105,11 @@ export interface CreasePointState {
   x: number;
   y: number;
   /**
-   * Cumulative position along the crease, 0 at the origin, 1 at the tip.
-   * Growth animation reveals points in arc order.
+   * Normalized distance from the crease ORIGIN (the press/anchor point):
+   * 0 at the origin, 1 at whichever end lies farther. Growth reveals
+   * points outward from the origin along both branches at once.
    */
-  arc: number;
+  fromOrigin: number;
 }
 
 /**

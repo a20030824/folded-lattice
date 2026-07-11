@@ -4,6 +4,7 @@ import type { CreaseFieldState, CreaseState, SimulationState } from "../state";
 import {
   buildCreaseState,
   evaluateCreaseField,
+  rebuildTopologyPreservingMotion,
   walkCreasePoints,
 } from "../topology/creaseTopology";
 
@@ -11,7 +12,7 @@ import {
  * Gives the fold network a layered life cycle:
  * - minors grow, set, and heal on a scale of minutes;
  * - the major skeleton itself hands over on a much longer period;
- * - a patient press of the hand sets a fold along the last drag gesture.
+ * - a press of the hand sets a fold along the last drag gesture.
  * The rest pose is re-derived from the evolving field, so shading,
  * physics, and history all follow one mechanism.
  */
@@ -19,19 +20,20 @@ import {
 interface LifeScratch {
   random: () => number;
   lastPointerSeenAt: number;
-  pressHeld: number;
-  pressFired: boolean;
-  lastPointerX: number;
-  lastPointerY: number;
+  pointerWasDown: boolean;
   lastMoveDirectionX: number;
   lastMoveDirectionY: number;
   lastMoveAt: number;
-  pressCooldownUntil: number;
   nextSpawnAt: number;
   nextMajorAt: number;
   spawnInCalmNext: boolean;
   recomputeTimer: number;
   dirty: boolean;
+  /**
+   * A structural event happened this tick (a fold was born): the mesh
+   * must be rebuilt around the new rail before the fold starts to grow.
+   */
+  remeshNeeded: boolean;
 }
 
 const scratchByState = new WeakMap<SimulationState, LifeScratch>();
@@ -100,6 +102,9 @@ function spawnFold(
     spec.strength,
     spec.widthRatio,
     points,
+    // The event point sits between the two walked branches; growth
+    // spreads outward from here, under the hand, never from a far tip.
+    Math.max(0, backward.length - 1),
     shortSide,
     0,
     spec.fadePerSecond,
@@ -112,6 +117,10 @@ function spawnFold(
   field.nextCreaseId += 1;
   field.creases.push(crease);
   scratch.dirty = true;
+  // The newborn is invisible (growth 0) but its rail must be IN the mesh
+  // before it grows - a fold living only in the height function falls
+  // between nodes on the sparse open sheet and never reads as a line.
+  scratch.remeshNeeded = true;
 }
 
 /**
@@ -196,19 +205,16 @@ export const creaseLifeSystem: SimulationSystem = {
     if (!scratch) {
       scratch = {
         random: createRandom(config.topology.randomSeed ^ 0x51f15e),
-        pressHeld: 0,
-        pressFired: false,
-        lastPointerX: 0,
-        lastPointerY: 0,
+        pointerWasDown: false,
         lastMoveDirectionX: 0,
         lastMoveDirectionY: 0,
         lastMoveAt: -1000,
-        pressCooldownUntil: 0,
         nextSpawnAt: 0,
         nextMajorAt: 0,
         spawnInCalmNext: false,
         recomputeTimer: 0,
         dirty: false,
+        remeshNeeded: false,
         lastPointerSeenAt: 0,
       };
       scratchByState.set(state, scratch);
@@ -255,7 +261,13 @@ export const creaseLifeSystem: SimulationSystem = {
     // Retire fully healed folds.
     for (let index = field.creases.length - 1; index >= 0; index -= 1) {
       const crease = field.creases[index]!;
-      if (crease.strength <= 0.001) field.creases.splice(index, 1);
+      if (crease.strength <= 0.001) {
+        field.creases.splice(index, 1);
+        // A dead fold must leave both the height field and the mesh.  Do
+        // not wait for an unrelated future birth to garbage-collect its
+        // rail, or the paper's topology would lag its visible lifecycle.
+        scratch.remeshNeeded = true;
+      }
     }
 
     // 2. Minor events alternate between the crush zones and the calmest
@@ -355,8 +367,8 @@ export const creaseLifeSystem: SimulationSystem = {
       }
     }
 
-    // 4. A patient press of the hand sets a new crease - oriented along
-    // the last drag gesture, so the fold remembers the hand's direction.
+    // 4. A press sets a new crease - oriented along the last drag gesture,
+    // so the fold remembers the hand's direction.
     const pointer = state.pointer;
     if (config.fields.pointer.enabled) {
       const speed = Math.hypot(pointer.velocity.x, pointer.velocity.y);
@@ -366,57 +378,52 @@ export const creaseLifeSystem: SimulationSystem = {
         scratch.lastMoveAt = elapsed;
       }
     }
-    if (pointer.isDown && config.fields.pointer.enabled) {
-      const drift = Math.hypot(
-        pointer.position.x - scratch.lastPointerX,
-        pointer.position.y - scratch.lastPointerY,
+    if (pointer.isDown && config.fields.pointer.enabled && !scratch.pointerWasDown) {
+      // Pressing on an existing fold irons it flat under the hand;
+      // pressing open paper sets a new fold along the last gesture.
+      const under = creaseUnderPoint(
+        field,
+        pointer.position.x,
+        pointer.position.y,
       );
-      scratch.pressHeld =
-        drift < field.shortSide * 0.02 ? scratch.pressHeld + deltaSeconds : 0;
-      scratch.lastPointerX = pointer.position.x;
-      scratch.lastPointerY = pointer.position.y;
-
-      if (
-        !scratch.pressFired &&
-        scratch.pressHeld >= life.pressSeconds &&
-        elapsed >= scratch.pressCooldownUntil
-      ) {
-        // Pressing on an existing fold irons it flat under the hand;
-        // pressing open paper sets a new fold along the last gesture.
-        const under = creaseUnderPoint(
-          field,
-          pointer.position.x,
-          pointer.position.y,
-        );
-        if (under) {
-          under.fadePerSecond = Math.max(under.fadePerSecond, under.strength / 6);
-          scratch.dirty = true;
-        } else {
-          const useGesture = elapsed - scratch.lastMoveAt < 4;
-          spawnFold(state, scratch, {
-            originX: pointer.position.x,
-            originY: pointer.position.y,
-            directionX: useGesture ? scratch.lastMoveDirectionX : undefined,
-            directionY: useGesture ? scratch.lastMoveDirectionY : undefined,
-            kind: "minor",
-            sign: -1,
-            strength: 0.9,
-            halfLength: field.shortSide * 0.15,
-            widthRatio: 0.1,
-            growSeconds: life.growSeconds * 0.7,
-            fadePerSecond: 0.9 / (life.fadeSeconds * 1.4),
-            maturitySeconds: life.growSeconds * 3,
-          });
-        }
-        scratch.pressFired = true;
-        scratch.pressCooldownUntil = elapsed + 6;
+      if (under) {
+        under.fadePerSecond = Math.max(under.fadePerSecond, under.strength / 6);
+        scratch.dirty = true;
+      } else {
+        const useGesture = elapsed - scratch.lastMoveAt < 4;
+        // Narrow and firm: a hand-set crease is a LINE, not a dent -
+        // wide soft tents read as low-poly pits on the sparse sheet.
+        spawnFold(state, scratch, {
+          originX: pointer.position.x,
+          originY: pointer.position.y,
+          directionX: useGesture ? scratch.lastMoveDirectionX : undefined,
+          directionY: useGesture ? scratch.lastMoveDirectionY : undefined,
+          kind: "minor",
+          sign: -1,
+          strength: 0.75,
+          halfLength: field.shortSide * 0.15,
+          widthRatio: 0.065,
+          growSeconds: life.growSeconds * 0.7,
+          fadePerSecond: 0.75 / (life.fadeSeconds * 1.4),
+          maturitySeconds: life.growSeconds * 3,
+        });
       }
-    } else {
-      scratch.pressHeld = 0;
-      scratch.pressFired = false;
+    }
+    scratch.pointerWasDown = pointer.isDown;
+
+    // 5. Structural event: rebuild the mesh around the new rail and hand
+    // the old sheet's motion over. The newborn fold is still invisible
+    // (growth 0), so the swap itself changes nothing on screen; from the
+    // next tick it grows outward from its origin along real mesh edges.
+    if (scratch.remeshNeeded) {
+      scratch.remeshNeeded = false;
+      rebuildTopologyPreservingMotion(state, config);
+      scratch.recomputeTimer = 0;
+      scratch.dirty = false;
+      return;
     }
 
-    // 5. Re-derive the rest pose from the evolved field, at 20 Hz.
+    // 6. Re-derive the rest pose from the evolved field, at 20 Hz.
     scratch.recomputeTimer += deltaSeconds;
     if (!scratch.dirty || scratch.recomputeTimer < 0.05) return;
     scratch.recomputeTimer = 0;
