@@ -4,8 +4,10 @@ import type { SimulationState } from "../state";
 
 /**
  * Seconds for soaked ink to dry out of a fibre once nothing feeds it.
+ * Short on purpose (judge's call): the veins are a breath that
+ * follows the body, not an archive.
  */
-const DRY_TAU = 130;
+const DRY_TAU = 9;
 /**
  * Diffusion rate toward the neighbourhood level, per second. Slow on
  * purpose: the ink CREEPS outward, a visible bleeding, not a flood.
@@ -95,7 +97,7 @@ export const inkWickSystem: SimulationSystem = {
         }
         if (drink > 0.02) {
           ink[index] = clamp(
-            ink[index]! + drink * deltaSeconds * 2.2,
+            ink[index]! + drink * deltaSeconds * 1.6,
             0,
             1,
           );

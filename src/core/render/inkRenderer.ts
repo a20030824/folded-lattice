@@ -1,5 +1,5 @@
 ﻿import type { Renderer } from "../contracts";
-import { clamp, mixRgb, parseColor, rgbString } from "../math";
+import { clamp, hash01, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
 import type { Rgb } from "../math";
 import type { Viewport } from "../types";
 
@@ -218,26 +218,14 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
           triangle.normal.x * lx +
           triangle.normal.y * ly +
           Math.abs(triangle.normal.z) * lz;
-        // Relief melts away within a band of the border so hull slivers
-        // never streak along the screen edge.
-        const borderDistance = Math.min(
-          triangle.center.x,
-          triangle.center.y,
-          viewport.width - triangle.center.x,
-          viewport.height - triangle.center.y,
-        );
-        const borderLinear = clamp(borderDistance / 90);
-        const borderFade = borderLinear * borderLinear;
-        shadeScratch[triangle.id] =
+        // With the overscanned sheet the hull lies outside the screen,
+        // so the relief runs edge to edge - no frame, no border fade.
+        shadeScratch[triangle.id] = clamp(
           0.5 +
-          (clamp(
-            0.5 +
-              (lambert - restLambert) * 3.4 +
-              triangle.foldValue * 1.25 +
-              triangle.memoryBias * 0.45,
-          ) -
-            0.5) *
-            borderFade;
+            (lambert - restLambert) * 3.4 +
+            triangle.foldValue * 1.25 +
+            triangle.memoryBias * 0.45,
+        );
       }
 
       // Facets are painted small, then blurred up onto the paper: one
@@ -302,15 +290,24 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       const creature = state.creature;
       if (edgeInk && edgeInk.length === state.topology.edges.length) {
         const edges = state.topology.edges;
-        context.lineWidth = 0.75;
+        const flickerTime = state.time.elapsed * 0.55;
+        context.lineWidth = 0.7;
         for (let index = 0; index < edges.length; index += 1) {
           const level = edgeInk[index]!;
-          if (level < 0.035) continue;
+          if (level < 0.06) continue;
+          // Broken, intermittent strands (judge's call): half the
+          // fibres never conduct visibly, and the rest come and go
+          // in slow fits.
+          const porosity = hash01(index * 2654435761);
+          if (porosity < 0.48) continue;
+          const flicker = valueNoise2D(index * 0.83, flickerTime);
+          if (flicker < 0.34) continue;
           const edge = edges[index]!;
           const a = nodes[edge.nodeA];
           const b = nodes[edge.nodeB];
-          if (!a || !b || a.pinned && b.pinned) continue;
-          const fade = Math.min(0.55, level * 0.62);
+          if (!a || !b || (a.pinned && b.pinned)) continue;
+          const fade =
+            Math.min(0.2, level * 0.26) * (0.45 + 0.55 * porosity);
           const inkIndex = Math.min(
             INK_LUT_STEPS - 1,
             Math.max(0, Math.round(fade * (INK_LUT_STEPS - 1))),
