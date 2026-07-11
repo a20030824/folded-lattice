@@ -175,51 +175,6 @@ function paintBackdrop(
   }
 }
 
-interface SmoothStrokePoint {
-  x: number;
-  y: number;
-  widthFactor: number;
-}
-
-function smoothStrokePoints(
-  source: readonly SmoothStrokePoint[],
-  iterations = 2,
-): SmoothStrokePoint[] {
-  if (source.length < 3) return [...source];
-
-  let result = [...source];
-
-  for (let iteration = 0; iteration < iterations; iteration += 1) {
-    const next: SmoothStrokePoint[] = [result[0]!];
-
-    for (let index = 0; index < result.length - 1; index += 1) {
-      const a = result[index]!;
-      const b = result[index + 1]!;
-
-      next.push({
-        x: a.x * 0.75 + b.x * 0.25,
-        y: a.y * 0.75 + b.y * 0.25,
-        widthFactor:
-          a.widthFactor * 0.75 +
-          b.widthFactor * 0.25,
-      });
-
-      next.push({
-        x: a.x * 0.25 + b.x * 0.75,
-        y: a.y * 0.25 + b.y * 0.75,
-        widthFactor:
-          a.widthFactor * 0.25 +
-          b.widthFactor * 0.75,
-      });
-    }
-
-    next.push(result[result.length - 1]!);
-    result = next;
-  }
-
-  return result;
-}
-
 /**
  * Light-paper renderer for the wandering-ink preset. The mesh is never
  * drawn as lines or points: flat terrain is indistinguishable from the

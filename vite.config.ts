@@ -9,9 +9,10 @@ export default defineConfig({
   },
   server: {
     watch: {
-      // .tmp holds throwaway browser profiles from headless test runs;
-      // watching them crashes the dev server on locked cookie files.
-      ignored: ["**/.tmp/**"],
+      // .tmp* holds throwaway browser profiles from headless test runs
+      // (e.g. .tmp-v2-chrome); watching them crashes the dev server on
+      // locked cookie/lock files mid-run.
+      ignored: ["**/.tmp/**", "**/.tmp-*/**"],
     },
   },
 });
