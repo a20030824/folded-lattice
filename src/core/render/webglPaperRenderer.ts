@@ -150,10 +150,6 @@ interface MeshBinding {
   faceNormals: Float32Array;
   nodeOcclusion: Float32Array;
   nodeAverageEdge: Float32Array;
-  /** Visual state sampled from the outgoing mesh at a topology handover. */
-  inheritedNormals: Float32Array | null;
-  inheritedOcclusions: Float32Array | null;
-  inheritedWeights: Float32Array | null;
 }
 
 /**
@@ -162,10 +158,7 @@ interface MeshBinding {
  */
 const NORMAL_SMOOTHING = 0.78;
 
-function buildMeshBinding(
-  topology: TopologyState,
-  previousMesh: MeshBinding | null = null,
-): MeshBinding {
+function buildMeshBinding(topology: TopologyState): MeshBinding {
   const { nodes, edges, triangles, creaseEdges } = topology;
   const vertexCount = triangles.length * 3;
 
@@ -267,7 +260,7 @@ function buildMeshBinding(
       node.edgeIndices.length > 0 ? total / node.edgeIndices.length : 1;
   }
 
-  const binding: MeshBinding = {
+  return {
     topology,
     vertexCount,
     positions: new Float32Array(vertexCount * 2),
@@ -284,74 +277,7 @@ function buildMeshBinding(
     faceNormals: new Float32Array(triangles.length * 3),
     nodeOcclusion: new Float32Array(nodes.length),
     nodeAverageEdge,
-    inheritedNormals: null,
-    inheritedOcclusions: null,
-    inheritedWeights: null,
   };
-  if (previousMesh) inheritOutgoingAppearance(binding, previousMesh);
-  return binding;
-}
-
-/**
- * Carries the rendered surface, not merely the simulated motion, across a
- * remesh. Each new triangle corner samples the outgoing mesh's last normal
- * and contact shadow at the same rest-XY position. The new topology can then
- * take over gradually without briefly flattening the whole sheet.
- */
-function inheritOutgoingAppearance(next: MeshBinding, previous: MeshBinding): void {
-  const oldTopology = previous.topology;
-  const inheritedNormals = new Float32Array(next.vertexCount * 3);
-  const inheritedOcclusions = new Float32Array(next.vertexCount);
-  const inheritedWeights = new Float32Array(next.vertexCount);
-
-  for (let vertex = 0; vertex < next.vertexCount; vertex += 1) {
-    const nextNode = next.topology.nodes[next.cornerNodes[vertex]!]!;
-    const x = nextNode.restPosition.x;
-    const y = nextNode.restPosition.y;
-
-    for (const triangle of oldTopology.triangles) {
-      const a = oldTopology.nodes[triangle.nodeA]!.restPosition;
-      const b = oldTopology.nodes[triangle.nodeB]!.restPosition;
-      const c = oldTopology.nodes[triangle.nodeC]!.restPosition;
-      if (
-        x < Math.min(a.x, b.x, c.x) || x > Math.max(a.x, b.x, c.x) ||
-        y < Math.min(a.y, b.y, c.y) || y > Math.max(a.y, b.y, c.y)
-      ) {
-        continue;
-      }
-      const denominator =
-        (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-      if (Math.abs(denominator) < 1e-9) continue;
-      const w0 = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / denominator;
-      const w1 = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / denominator;
-      const w2 = 1 - w0 - w1;
-      if (w0 < -0.002 || w1 < -0.002 || w2 < -0.002) continue;
-
-      const offset = triangle.id * 3;
-      inheritedNormals[vertex * 3] =
-        w0 * previous.normals[offset]! +
-        w1 * previous.normals[offset + 3]! +
-        w2 * previous.normals[offset + 6]!;
-      inheritedNormals[vertex * 3 + 1] =
-        w0 * previous.normals[offset + 1]! +
-        w1 * previous.normals[offset + 4]! +
-        w2 * previous.normals[offset + 7]!;
-      inheritedNormals[vertex * 3 + 2] =
-        w0 * previous.normals[offset + 2]! +
-        w1 * previous.normals[offset + 5]! +
-        w2 * previous.normals[offset + 8]!;
-      inheritedOcclusions[vertex] =
-        w0 * previous.occlusions[offset]! +
-        w1 * previous.occlusions[offset + 1]! +
-        w2 * previous.occlusions[offset + 2]!;
-      inheritedWeights[vertex] = 1;
-      break;
-    }
-  }
-
-  next.inheritedNormals = inheritedNormals;
-  next.inheritedOcclusions = inheritedOcclusions;
-  next.inheritedWeights = inheritedWeights;
 }
 
 export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
@@ -411,8 +337,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     state: Readonly<SimulationState>,
     depthProjection: number,
     occlusionStrength: number,
-    handoverProgress: number,
-    handoverCreaseId: number | null,
   ): void => {
     if (!mesh) return;
     const { nodes, triangles } = state.topology;
@@ -421,7 +345,6 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       groupAllOffsets, groupAllCounts, groupSideOffsets, groupSideCounts,
       smoothingGroups, vertexCreaseId, vertexFromOrigin, cornerNodes,
       nodeOcclusion, nodeAverageEdge,
-      inheritedNormals, inheritedOcclusions, inheritedWeights,
     } = mesh;
 
     // Sharpness is read from the LIVING creases every frame, not from a
@@ -484,16 +407,12 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
         // growth window advancing outward from the fold's origin.
         let sharpness = 0;
         const creaseId = vertexCreaseId[vertex]!;
-        let crease: CreaseState | undefined;
         if (creaseId >= 0) {
-          crease = creaseById.get(creaseId);
+          const crease = creaseById.get(creaseId);
           if (crease) {
             sharpness =
               clamp(crease.strength * 1.4) *
               clamp((crease.growth - vertexFromOrigin[vertex]!) / 0.12);
-            if (creaseId === handoverCreaseId) {
-              sharpness *= handoverProgress;
-            }
           }
         }
 
@@ -544,39 +463,10 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
         y /= length;
         z /= length;
 
-        // The replacement mesh inherits the outgoing paper's actual
-        // shading at this point, then releases it into the new normals.
-        // A newborn crease reaches its own shading behind the growth front;
-        // unchanged paper never takes a detour through a flat state.
-        let appearanceProgress = handoverProgress;
-        if (crease && creaseId === handoverCreaseId) {
-          appearanceProgress = Math.max(
-            appearanceProgress,
-            clamp((crease.growth - vertexFromOrigin[vertex]! + 0.1) / 0.2),
-          );
-        }
-        if (inheritedNormals && inheritedOcclusions && inheritedWeights?.[vertex]) {
-          const inheritedX = inheritedNormals[vertex * 3]!;
-          const inheritedY = inheritedNormals[vertex * 3 + 1]!;
-          const inheritedZ = inheritedNormals[vertex * 3 + 2]!;
-          x = inheritedX + (x - inheritedX) * appearanceProgress;
-          y = inheritedY + (y - inheritedY) * appearanceProgress;
-          z = inheritedZ + (z - inheritedZ) * appearanceProgress;
-          const inheritedLength = Math.max(1e-6, Math.hypot(x, y, z));
-          x /= inheritedLength;
-          y /= inheritedLength;
-          z /= inheritedLength;
-          occlusions[vertex] =
-            inheritedOcclusions[vertex]! +
-            (nodeOcclusion[cornerNodes[vertex]!]! - inheritedOcclusions[vertex]!) *
-              appearanceProgress;
-        } else {
-          occlusions[vertex] = nodeOcclusion[cornerNodes[vertex]!]!;
-        }
-
         normals[vertex * 3] = x;
         normals[vertex * 3 + 1] = y;
         normals[vertex * 3 + 2] = z;
+        occlusions[vertex] = nodeOcclusion[cornerNodes[vertex]!]!;
       }
     }
   };
@@ -605,13 +495,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
         uploadStatic();
       }
 
-      updateMesh(
-        state,
-        config.render.depthProjection,
-        settings.valleyShadowStrength,
-        1,
-        null,
-      );
+      updateMesh(state, config.render.depthProjection, settings.valleyShadowStrength);
 
       const background = parseColor(config.render.colors.background);
       gl.clearColor(background.r / 255, background.g / 255, background.b / 255, 1);
