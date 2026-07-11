@@ -411,46 +411,173 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
         context.filter = "none";
         context.globalAlpha = 1;
       }
-
+      context.globalAlpha = 1;
       // The creature: one continuous brush stroke, tail melting into
       // the paper, width recorded from its pace when each point was laid.
+
       const creatureConfig = config.creature;
+
       if (creature && creatureConfig && creature.points.length > 1) {
         const shortSide = Math.max(
           1,
           Math.min(viewport.width, viewport.height),
         );
-        const maximumWidth = creatureConfig.inkWidthRatio * shortSide;
+
+        const maximumWidth =
+          creatureConfig.inkWidthRatio * shortSide;
+
         const points = creature.points;
         const count = points.length;
 
+        // 前 25% 是逐漸透明的尾巴
+        const tailEndIndex = Math.min(
+          count - 1,
+          Math.max(
+            1,
+            Math.floor((count - 1) * 0.25),
+          ),
+        );
+
+        const tailStart = points[0]!;
+        const tailEnd = points[tailEndIndex]!;
+        const inkColor = parseColor(
+          config.render.colors.ink ?? "#34425c",
+        );
+
+        // 透明尾巴的漸層
+        const tailGradient = context.createLinearGradient(
+          tailStart.x,
+          tailStart.y,
+          tailEnd.x,
+          tailEnd.y,
+        );
+
+        tailGradient.addColorStop(
+          0,
+          `rgba(${inkColor.r | 0}, ${inkColor.g | 0}, ${inkColor.b | 0}, 0)`,
+        );
+
+        tailGradient.addColorStop(
+          1,
+          `rgba(${inkColor.r | 0}, ${inkColor.g | 0}, ${inkColor.b | 0}, 1)`,
+        );
+
+        // 一次畫完整條尾巴，避免每節變成虛線
+        // 用左右邊界組成一條逐漸變粗的帶狀尾巴
+        const leftSide: Array<{ x: number; y: number }> = [];
+        const rightSide: Array<{ x: number; y: number }> = [];
+
+        for (let index = 0; index <= tailEndIndex; index += 1) {
+          const point = points[index]!;
+          const previous = points[Math.max(0, index - 1)]!;
+          const next = points[Math.min(tailEndIndex, index + 1)]!;
+
+          // 算出身體前進方向
+          const directionX = next.x - previous.x;
+          const directionY = next.y - previous.y;
+          const directionLength =
+            Math.hypot(directionX, directionY) || 1;
+
+          // 與前進方向垂直的方向
+          const normalX = -directionY / directionLength;
+          const normalY = directionX / directionLength;
+
+          // 0 = 尾端，1 = 接到正常身體的位置
+          const tailArc =
+            tailEndIndex > 0 ? index / tailEndIndex : 1;
+
+          // 平滑地從 0 增加到 1
+          const tailTaper =
+            tailArc * tailArc * (3 - 2 * tailArc);
+
+          // 使用正常身體原本的粗細公式
+          const bodyArc = index / (count - 1);
+
+          const bodyTaper =
+            clamp(bodyArc / 0.06) *
+            (
+              0.55 +
+              0.45 * clamp((1 - bodyArc) / 0.045)
+            );
+
+          const width = Math.max(
+            0,
+            maximumWidth *
+              point.widthFactor *
+              bodyTaper *
+              tailTaper,
+          );
+
+          const halfWidth = width * 0.5;
+
+          leftSide.push({
+            x: point.x + normalX * halfWidth,
+            y: point.y + normalY * halfWidth,
+          });
+
+          rightSide.push({
+            x: point.x - normalX * halfWidth,
+            y: point.y - normalY * halfWidth,
+          });
+        }
+
+        // 尾巴是一整個連續面，不再是一節一節的 stroke
         context.globalAlpha = 1;
-        for (let index = 1; index < count; index += 1) {
+        context.fillStyle = tailGradient;
+
+        context.beginPath();
+
+        const firstLeft = leftSide[0]!;
+        context.moveTo(firstLeft.x, firstLeft.y);
+
+        for (let index = 1; index < leftSide.length; index += 1) {
+          const point = leftSide[index]!;
+          context.lineTo(point.x, point.y);
+        }
+
+        for (let index = rightSide.length - 1; index >= 0; index -= 1) {
+          const point = rightSide[index]!;
+          context.lineTo(point.x, point.y);
+        }
+
+        context.closePath();
+        context.fill();
+
+        // 畫尾巴後面的正常身體
+        context.globalAlpha = 1;
+        context.strokeStyle = palette.inkSolid;
+
+        for (
+          let index = tailEndIndex + 1;
+          index < count;
+          index += 1
+        ) {
           const from = points[index - 1]!;
           const to = points[index]!;
           const arc = index / (count - 1);
-          // Tail fades into paper over the first quarter of the body:
-          // the ink does not vanish, it has gone into the fibres.
-          const fade = clamp(arc / 0.25);
-          const inkIndex = Math.min(
-            INK_LUT_STEPS - 1,
-            Math.max(0, Math.round(fade * (INK_LUT_STEPS - 1))),
-          );
-          if (inkIndex === 0) continue;
-          const taper = clamp(arc / 0.06) * (0.55 + 0.45 * clamp((1 - arc) / 0.045));
-          context.strokeStyle = palette.ink[inkIndex]!;
+
+          const taper =
+            clamp(arc / 0.06) *
+            (
+              0.55 +
+              0.45 * clamp((1 - arc) / 0.045)
+            );
+
           context.lineWidth = Math.max(
             0.4,
             maximumWidth * to.widthFactor * taper,
           );
+
           context.beginPath();
           context.moveTo(from.x, from.y);
           context.lineTo(to.x, to.y);
           context.stroke();
         }
+
+        context.globalAlpha = 1;
+
         // No extra object at rest: the "puddle" is the line itself,
-        // laid down thick while it winds into a coil (judge's call -
-        // the earlier painted blot never read as part of the body).
+        // laid down thick while it winds into a coil.
       }
 
       context.globalAlpha = 1;
