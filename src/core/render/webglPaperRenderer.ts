@@ -308,10 +308,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     alpha: false,
     antialias: true,
     depth: false,
-    // Topology handovers copy the previous paper into a short-lived
-    // transition texture. Without this the browser may discard the
-    // default framebuffer after presenting, leaving that texture black.
-    preserveDrawingBuffer: true,
+    preserveDrawingBuffer: false,
   });
   if (!gl) throw new Error("WebGL is not available.");
 
@@ -538,20 +535,9 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
   };
 
   const beginTopologyTransition = (state: Readonly<SimulationState>): void => {
-    // The prior frame is the outgoing paper. Copying it before buffers are
-    // rebound avoids maintaining a second live simulation just for a brief
-    // visual handover.
-    configureTexture(transitionSnapshot);
-    gl.copyTexImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
-      0,
-    );
+    // transitionSnapshot was copied at the end of the previous normal
+    // frame. Reading the default framebuffer only now is unreliable: it
+    // may already have been discarded by the browser after presentation.
     const field = state.topology.creaseField;
     const newborn = field?.creases.reduce<CreaseState | null>(
       (latest, crease) =>
@@ -620,6 +606,19 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       canvas.style.width = `${nextViewport.width}px`;
       canvas.style.height = `${nextViewport.height}px`;
       gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.activeTexture(gl.TEXTURE0);
+      configureTexture(transitionSnapshot);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        canvas.width,
+        canvas.height,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null,
+      );
     },
 
     render(state, config) {
@@ -704,6 +703,24 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       gl.vertexAttribPointer(attributes.occlusion, 1, gl.FLOAT, false, 0, 0);
 
       gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount);
+
+      // Save this complete paper BEFORE the browser presents/discards its
+      // default framebuffer. A later topology event can safely use it as
+      // the outgoing image without another simulation or a black readback.
+      if (!transition) {
+        gl.activeTexture(gl.TEXTURE0);
+        configureTexture(transitionSnapshot);
+        gl.copyTexSubImage2D(
+          gl.TEXTURE_2D,
+          0,
+          0,
+          0,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+      }
     },
 
     dispose() {
