@@ -4,6 +4,8 @@ export interface TopologyConfig {
   marginRatio: number;
   pinBoundary: boolean;
   randomSeed: number;
+  /** Optional pinned ring outside the viewport: the triangulated surface fills every pixel. */
+  overscanRatio?: number;
 }
 
 export interface PhysicsConfig {
@@ -88,6 +90,14 @@ export interface RevealConfig {
    * Base brightness added to edges inside a revealed patch.
    */
   patchTrace: number;
+  /** Optional travelling-wave reveal, measured from vertical node speed. */
+  edgeMotionThreshold?: number;
+  edgeMotionGain?: number;
+  triangleMotionThreshold?: number;
+  triangleMotionGain?: number;
+  /** Display knee: sub-threshold edges/nodes collapse to a near-black floor. */
+  structureVisibilityThreshold?: number;
+  structureVisibilityFloor?: number;
 }
 
 export interface ColorConfig {
@@ -319,6 +329,19 @@ export interface PulseConfig {
    * the membrane was touched) instead of a random interior one.
    */
   memoryOriginChance: number;
+  /** A fresh pointer press launches the same visible front from the touched node. */
+  pointerTrigger?: boolean;
+}
+
+/** Pointer gestures excite travelling waves in a taut membrane. */
+export interface MembraneWaveConfig {
+  enabled: boolean;
+  impactRadiusRatio: number;
+  impactStrength: number;
+  impactSeconds: number;
+  dragSpacingRatio: number;
+  dragStrength: number;
+  dragSeconds: number;
 }
 
 /**
@@ -375,5 +398,6 @@ export interface FoldedLatticeConfig {
   crease?: CreaseConfig;
   contour?: ContourConfig;
   pulse?: PulseConfig;
+  membraneWave?: MembraneWaveConfig;
   creature?: CreatureConfig;
 }

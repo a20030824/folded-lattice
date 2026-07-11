@@ -40,6 +40,16 @@ export const revealSystem: FrameSystem = {
         (edge.tension - settings.edgeTensionThreshold) * settings.edgeTensionGain,
       );
       const memorySignal = edge.memory * settings.edgeMemoryGain;
+      const verticalMotion =
+        (Math.abs(a.velocity.z) + Math.abs(b.velocity.z)) * 0.5;
+      const edgeMotionGain = settings.edgeMotionGain ?? 0;
+      const motionSignal =
+        edgeMotionGain > 0
+          ? clamp(
+              (verticalMotion - (settings.edgeMotionThreshold ?? 0)) *
+                edgeMotionGain,
+            )
+          : 0;
       // The pinned hull would otherwise read as a hard picture frame.
       const boundaryFade = a.pinned && b.pinned ? 0.2 : 1;
       const target =
@@ -47,7 +57,8 @@ export const revealSystem: FrameSystem = {
           settings.edgeBaseVisibility +
             patchSignal * settings.patchTrace +
             tensionSignal +
-            memorySignal,
+            memorySignal +
+            motionSignal,
         ) * boundaryFade;
       const rate = target > edge.visibility ? settings.revealAttack : settings.revealRelease;
       edge.visibility = damp(edge.visibility, target, rate, deltaSeconds);
@@ -75,8 +86,26 @@ export const revealSystem: FrameSystem = {
           settings.triangleFoldGain,
       );
       const memorySignal = Math.abs(triangle.memoryBias) * settings.triangleMemoryGain;
+      const a = nodes[triangle.nodeA];
+      const b = nodes[triangle.nodeB];
+      const c = nodes[triangle.nodeC];
+      const verticalMotion =
+        a && b && c
+          ? (Math.abs(a.velocity.z) + Math.abs(b.velocity.z) + Math.abs(c.velocity.z)) / 3
+          : 0;
+      const triangleMotionGain = settings.triangleMotionGain ?? 0;
+      const motionSignal =
+        triangleMotionGain > 0
+          ? clamp(
+              (verticalMotion - (settings.triangleMotionThreshold ?? 0)) *
+                triangleMotionGain,
+            )
+          : 0;
       const target = clamp(
-        patchSignal * (0.06 + foldSignal * 0.9) + foldSignal * 0.5 + memorySignal,
+        patchSignal * (0.06 + foldSignal * 0.9) +
+          foldSignal * 0.5 +
+          memorySignal +
+          motionSignal,
       );
       const rate =
         target > triangle.visibility ? settings.revealAttack : settings.revealRelease;

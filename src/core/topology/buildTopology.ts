@@ -111,6 +111,24 @@ function generatePoints(viewport: Viewport, config: FoldedLatticeConfig): Point[
   return [];
 }
 
+function buildOverscanRing(viewport: Viewport, ratio: number): Point[] {
+  if (ratio <= 0) return [];
+  const overscan = Math.min(viewport.width, viewport.height) * ratio;
+  const minX = -overscan;
+  const maxX = viewport.width + overscan;
+  const minY = -overscan;
+  const maxY = viewport.height + overscan;
+  const points: Point[] = [];
+  for (let index = 0; index < 12; index += 1) {
+    const t = index / 12;
+    points.push({ x: minX + (maxX - minX) * t, y: minY });
+    points.push({ x: maxX, y: minY + (maxY - minY) * t });
+    points.push({ x: maxX - (maxX - minX) * t, y: maxY });
+    points.push({ x: minX, y: maxY - (maxY - minY) * t });
+  }
+  return points;
+}
+
 function distance(a: NodeState, b: NodeState): number {
   return Math.hypot(
     b.position.x - a.position.x,
@@ -121,7 +139,10 @@ function distance(a: NodeState, b: NodeState): number {
 
 export const delaunayTopologyBuilder = {
   build(viewport: Viewport, config: FoldedLatticeConfig): TopologyState {
-    const points = generatePoints(viewport, config);
+    const points = [
+      ...generatePoints(viewport, config),
+      ...buildOverscanRing(viewport, config.topology.overscanRatio ?? 0),
+    ];
     if (points.length < 3) {
       return { nodes: [], edges: [], triangles: [], creaseEdges: [] };
     }

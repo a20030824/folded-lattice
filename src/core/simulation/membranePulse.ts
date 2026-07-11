@@ -18,6 +18,8 @@ interface PulseScratch {
   maxDistance: number;
   waitSeconds: number;
   scheduled: boolean;
+  pointerWasDown: boolean;
+  visualFront: boolean;
 }
 
 const scratchByState = new WeakMap<SimulationState, PulseScratch>();
@@ -35,6 +37,8 @@ function getScratch(state: SimulationState, seed: number): PulseScratch {
       maxDistance: 0,
       waitSeconds: 0,
       scheduled: false,
+      pointerWasDown: false,
+      visualFront: false,
     };
     scratchByState.set(state, scratch);
   }
@@ -44,6 +48,7 @@ function getScratch(state: SimulationState, seed: number): PulseScratch {
     scratch.edgeDistance = new Float32Array(state.topology.edges.length);
     scratch.active = false;
     scratch.scheduled = false;
+    scratch.pointerWasDown = false;
   }
   return scratch;
 }
@@ -81,7 +86,12 @@ function pickOrigin(
   return 0;
 }
 
-function spawnPulse(state: SimulationState, scratch: PulseScratch, origin: number): void {
+function spawnPulse(
+  state: SimulationState,
+  scratch: PulseScratch,
+  origin: number,
+  visualFront: boolean,
+): void {
   const { nodes, edges } = state.topology;
   const distance = scratch.nodeDistance;
   distance.fill(Number.POSITIVE_INFINITY);
@@ -127,6 +137,7 @@ function spawnPulse(state: SimulationState, scratch: PulseScratch, origin: numbe
   scratch.maxDistance = maxDistance;
   scratch.active = true;
   scratch.age = 0;
+  scratch.visualFront = visualFront;
 }
 
 export const membranePulseSystem: SimulationSystem = {
@@ -143,6 +154,30 @@ export const membranePulseSystem: SimulationSystem = {
       if (edge.pulse > 0.0005) edge.pulse *= cooling;
     }
 
+    const pointerDown = state.pointer.isInside && state.pointer.isDown;
+    const pointerIgnited =
+      settings.pointerTrigger && pointerDown && !scratch.pointerWasDown;
+    scratch.pointerWasDown = pointerDown;
+    if (pointerIgnited) {
+      let nearest = -1;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const node of nodes) {
+        if (node.pinned) continue;
+        const dx = node.position.x - state.pointer.position.x;
+        const dy = node.position.y - state.pointer.position.y;
+        const distance = dx * dx + dy * dy;
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearest = node.id;
+        }
+      }
+      if (nearest >= 0) {
+        spawnPulse(state, scratch, nearest, true);
+        scratch.scheduled = true;
+        scratch.waitSeconds = settings.intervalSeconds;
+      }
+    }
+
     if (!scratch.active) {
       if (!scratch.scheduled) {
         // First pulse arrives early so a freshly set wallpaper shows its
@@ -156,6 +191,7 @@ export const membranePulseSystem: SimulationSystem = {
         state,
         scratch,
         pickOrigin(nodes, edges, scratch, settings.memoryOriginChance),
+        false,
       );
       return;
     }
@@ -178,7 +214,10 @@ export const membranePulseSystem: SimulationSystem = {
       const signal =
         Math.exp(-normalized * normalized) * Math.exp(-edgeDistance / falloff);
       const edge = edges[index]!;
-      if (signal > edge.pulse) edge.pulse = signal;
+      const visibleSignal = scratch.visualFront
+        ? signal
+        : 0;
+      if (visibleSignal > edge.pulse) edge.pulse = visibleSignal;
       edge.memory = Math.min(
         maximumMemory,
         edge.memory + settings.memoryDeposit * signal * deltaSeconds,
@@ -192,8 +231,12 @@ export const membranePulseSystem: SimulationSystem = {
         const nodeDistance = scratch.nodeDistance[index] ?? 0;
         const normalized = (nodeDistance - radius) / band;
         if (normalized * normalized > 9) continue;
+        // A heartbeat is biphasic: the leading half lifts and the trailing
+        // half pulls back. Its temporal integral is near zero, so repeated
+        // pulses ring the membrane instead of slowly inflating it.
         node.force.z +=
           settings.kickStrength *
+          normalized *
           Math.exp(-normalized * normalized) *
           Math.exp(-nodeDistance / falloff);
       }

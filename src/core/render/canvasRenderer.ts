@@ -184,6 +184,16 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
         1,
         Math.min(viewport.width, viewport.height) * config.physics.maximumDepthRatio,
       );
+      const structureThreshold = config.reveal.structureVisibilityThreshold;
+      const structureFloor = config.reveal.structureVisibilityFloor ?? 0;
+      const visibleStructure = (visibility: number): number => {
+        if (structureThreshold === undefined) return visibility;
+        if (visibility <= structureThreshold) return structureFloor;
+        const transition = clamp(
+          (visibility - structureThreshold) / Math.max(0.001, structureThreshold * 0.55),
+        );
+        return structureFloor + (visibility - structureFloor) * transition;
+      };
 
       if (!palette || palette.key !== buildPaletteKey(render.colors)) {
         palette = buildPalette(render.colors);
@@ -270,7 +280,8 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
 
       // Edges: tension warms the tone, depth toward the eye lifts the alpha.
       for (const edge of edges) {
-        if (edge.visibility < 0.004) continue;
+        const edgeVisibility = visibleStructure(edge.visibility);
+        if (edgeVisibility < 0.001) continue;
         const a = nodes[edge.nodeA];
         const b = nodes[edge.nodeB];
         if (!a || !b) continue;
@@ -287,7 +298,7 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
         );
 
         context.globalAlpha =
-          render.edgeOpacity * edge.visibility * (0.82 + depth * 0.18);
+          render.edgeOpacity * edgeVisibility * (0.82 + depth * 0.18);
         context.strokeStyle = palette.edgeStroke[lutIndex]!;
         context.lineWidth =
           render.edgeMinimumWidth +
@@ -367,9 +378,16 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
             visibilitySum += edges[edgeIndex]?.visibility ?? 0;
           }
           const glint = visibilitySum / node.edgeIndices.length;
-          if (glint < 0.22) continue;
-          context.globalAlpha =
-            atmosphere.nodeGlintOpacity * clamp((glint - 0.22) * 2.2);
+          const visibleGlint = visibleStructure(glint);
+          if (structureThreshold === undefined) {
+            if (glint < 0.22) continue;
+            context.globalAlpha =
+              atmosphere.nodeGlintOpacity * clamp((glint - 0.22) * 2.2);
+          } else {
+            if (visibleGlint <= structureFloor + 0.001) continue;
+            context.globalAlpha =
+              atmosphere.nodeGlintOpacity * clamp(visibleGlint * 1.8);
+          }
           context.beginPath();
           context.arc(
             projectedX(node, render.depthProjection),

@@ -11,18 +11,6 @@ interface LivelyBridgeControls {
   refreshRenderer(): void;
 }
 
-const defaults = {
-  pressureMinimumStrength: 18,
-  pressureMaximumStrength: 42,
-  pressureMinimumRadius: 0.12,
-  pressureMaximumRadius: 0.27,
-  pressureMinimumSpeed: 2,
-  pressureMaximumSpeed: 8,
-  ambientSpeed: 0.045,
-  edgeRestLengthInfluence: 0.012,
-  pointerStrength: 38,
-};
-
 function asNumber(value: unknown, fallback: number): number {
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -33,6 +21,22 @@ export function installLivelyBridge(
   controls: LivelyBridgeControls,
 ): () => void {
   let rebuildTimer = 0;
+  // Every preset defines its own visual baseline. Lively sliders scale that
+  // baseline instead of silently snapping alternate works back to V1 values.
+  const defaults = {
+    nodeCount: config.topology.nodeCount,
+    edgeOpacity: config.render.edgeOpacity,
+    triangleOpacity: config.render.triangleOpacity,
+    pressureMinimumStrength: config.fields.pressure.minimumStrength,
+    pressureMaximumStrength: config.fields.pressure.maximumStrength,
+    pressureMinimumRadius: config.fields.pressure.minimumRadiusRatio,
+    pressureMaximumRadius: config.fields.pressure.maximumRadiusRatio,
+    pressureMinimumSpeed: config.fields.pressure.minimumSpeed,
+    pressureMaximumSpeed: config.fields.pressure.maximumSpeed,
+    ambientSpeed: config.fields.ambient.speed,
+    edgeRestLengthInfluence: config.memory.edgeRestLengthInfluence,
+    pointerStrength: config.fields.pointer.strength,
+  };
 
   const scheduleRebuild = (): void => {
     window.clearTimeout(rebuildTimer);
@@ -45,13 +49,17 @@ export function installLivelyBridge(
         if (typeof value === "string") config.render.colors.background = value;
         break;
       case "edgeBrightness":
-        config.render.edgeOpacity = asNumber(value, 55) / 100;
+        config.render.edgeOpacity =
+          defaults.edgeOpacity * (asNumber(value, 55) / 55);
         break;
       case "triangleVisibility":
-        config.render.triangleOpacity = asNumber(value, 20) / 100;
+        config.render.triangleOpacity =
+          defaults.triangleOpacity * (asNumber(value, 20) / 20);
         break;
       case "nodeCount":
-        config.topology.nodeCount = Math.round(asNumber(value, 120));
+        config.topology.nodeCount = Math.round(
+          defaults.nodeCount * (asNumber(value, 120) / 120),
+        );
         scheduleRebuild();
         break;
       case "pressureStrength": {

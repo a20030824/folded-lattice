@@ -1,12 +1,13 @@
 import type { FoldedLatticeConfig } from "../core/config";
 import type { PresetDefinition } from "../core/contracts";
 import { ambientDriftSystem } from "../core/fields/ambientDriftField";
-import { mouseFieldSystem, pointerSmoothingSystem } from "../core/fields/mouseField";
+import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
 import { memorySystem } from "../core/memory/updateMemory";
 import { revealSystem } from "../core/reveal/updateReveal";
 import { springSystem } from "../core/simulation/applySprings";
 import { membranePulseSystem } from "../core/simulation/membranePulse";
+import { membraneWaveSystem } from "../core/simulation/membraneWave";
 import { integrationSystem } from "../core/simulation/integrate";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
@@ -14,25 +15,26 @@ import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
 
 const config: FoldedLatticeConfig = {
   topology: {
-    nodeCount: 120,
-    minimumDistanceRatio: 0.055,
+    nodeCount: 260,
+    minimumDistanceRatio: 0.043,
     marginRatio: 0.04,
     pinBoundary: true,
     randomSeed: 42173,
+    overscanRatio: 0.045,
   },
   physics: {
-    springStrength: 8,
+    springStrength: 14,
     planarSpringStrength: 0.55,
     verticalSpringStrength: 1,
     // Loosened so disturbances ring outward as travelling waves; the
     // taut-membrane term below is inherited from the water experiment
     // (judge's call: the wave language belongs to the membrane).
-    damping: 2.6,
-    restPoseStrength: 0.35,
+    damping: 1.9,
+    restPoseStrength: 0.2,
     maximumDepthRatio: 0.065,
     maximumVelocity: 280,
     solverIterations: 1,
-    transverseSpringStrength: 1.2,
+    transverseSpringStrength: 2.4,
   },
   fields: {
     pressure: {
@@ -49,8 +51,8 @@ const config: FoldedLatticeConfig = {
     pointer: {
       enabled: true,
       radiusRatio: 0.13,
-      strength: 38,
-      dragStrength: 0.07,
+      strength: 0,
+      dragStrength: 0,
       influenceAttack: 4,
       influenceRelease: 1.3,
     },
@@ -67,7 +69,7 @@ const config: FoldedLatticeConfig = {
     maximumMemory: 0.7,
   },
   reveal: {
-    edgeBaseVisibility: 0.045,
+    edgeBaseVisibility: 0.008,
     edgeTensionThreshold: 0.006,
     edgeTensionGain: 22,
     edgeMemoryGain: 0.34,
@@ -76,16 +78,22 @@ const config: FoldedLatticeConfig = {
     triangleMemoryGain: 0.2,
     revealAttack: 1.6,
     revealRelease: 0.4,
-    maximumVisibleEdgeRatio: 0.4,
-    maximumVisibleTriangleRatio: 0.3,
+    maximumVisibleEdgeRatio: 0.2,
+    maximumVisibleTriangleRatio: 0.16,
     patchScale: 1.9,
     patchDriftSpeed: 0.045,
-    patchTrace: 0.3,
+    patchTrace: 0.075,
+    edgeMotionThreshold: 1.2,
+    edgeMotionGain: 0.085,
+    triangleMotionThreshold: 1.5,
+    triangleMotionGain: 0.06,
+    structureVisibilityThreshold: 0.35,
+    structureVisibilityFloor: 0.0015,
   },
   render: {
     edgeMinimumWidth: 0.5,
     edgeMaximumWidth: 1.5,
-    edgeOpacity: 0.55,
+    edgeOpacity: 0.46,
     triangleOpacity: 0.2,
     highlightOpacity: 0.6,
     depthProjection: 0.085,
@@ -95,7 +103,7 @@ const config: FoldedLatticeConfig = {
       fieldGlowScale: 1.7,
       vignetteStrength: 0.42,
       centerLift: 0.075,
-      nodeGlintOpacity: 0.5,
+      nodeGlintOpacity: 0.1,
     },
     colors: {
       background: "#0a0e14",
@@ -115,13 +123,23 @@ const config: FoldedLatticeConfig = {
   },
   pulse: {
     enabled: true,
-    intervalSeconds: 42,
+    intervalSeconds: 7,
     speedRatio: 0.1,
     bandRatio: 0.055,
     falloffRatio: 0.24,
     memoryDeposit: 0.55,
-    kickStrength: 18,
+    kickStrength: 1600,
     memoryOriginChance: 0.55,
+    pointerTrigger: true,
+  },
+  membraneWave: {
+    enabled: true,
+    impactRadiusRatio: 0.038,
+    impactStrength: 4200,
+    impactSeconds: 0.14,
+    dragSpacingRatio: 0.025,
+    dragStrength: 1500,
+    dragSeconds: 0.09,
   },
 };
 
@@ -136,7 +154,7 @@ export const breathingMembranePreset: PresetDefinition = {
     resetForcesSystem,
     pressureFieldSystem,
     ambientDriftSystem,
-    mouseFieldSystem,
+    membraneWaveSystem,
     membranePulseSystem,
     springSystem,
     integrationSystem,
