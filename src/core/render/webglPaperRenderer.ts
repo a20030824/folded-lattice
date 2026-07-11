@@ -621,29 +621,16 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       if (state.topology.triangles.length === 0) return;
 
       if (!mesh || mesh.topology !== state.topology) {
-        const previousMesh = mesh;
-        if (previousMesh) beginTopologyTransition(state);
-        mesh = buildMeshBinding(state.topology, previousMesh);
+        mesh = buildMeshBinding(state.topology);
         uploadStatic();
-      }
-
-      let handoverProgress = 1;
-      let handoverCreaseId: number | null = null;
-      if (transition) {
-        const linearProgress = clamp(
-          (state.time.elapsed - transition.startedAt) / TOPOLOGY_HANDOVER_SECONDS,
-        );
-        handoverProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
-        handoverCreaseId = transition.creaseId;
-        if (linearProgress >= 1) transition = null;
       }
 
       updateMesh(
         state,
         config.render.depthProjection,
         settings.valleyShadowStrength,
-        handoverProgress,
-        handoverCreaseId,
+        1,
+        null,
       );
 
       const background = parseColor(config.render.colors.background);
