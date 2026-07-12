@@ -56,7 +56,8 @@ function startPreset(name: string | null): void {
     getViewport(),
   );
   const unbindPointer = bindPointerInput(canvas!, engine.getState);
-  const removeLivelyBridge = installLivelyBridge(config, {
+  const propertyBindings = definition.createPropertyBindings(config);
+  const removeLivelyBridge = installLivelyBridge(propertyBindings, {
     rebuildTopology: engine.rebuildTopology,
     refreshRenderer: () => engine.resize(getViewport()),
     selectPreset: startPreset,

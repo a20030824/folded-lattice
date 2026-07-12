@@ -1,4 +1,8 @@
-import type { FoldedLatticeConfig } from "../core/config";
+import { asNumber } from "./properties";
+import type {
+  PropertyBinding,
+  PropertyBindingContext,
+} from "./properties";
 
 declare global {
   interface Window {
@@ -12,11 +16,6 @@ interface LivelyBridgeControls {
   selectPreset(name: string): void;
 }
 
-function asNumber(value: unknown, fallback: number): number {
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
-
 const presetNames = ["paper", "ink", "membrane", "tide"] as const;
 function presetNameFromValue(value: unknown): string {
   const index = Math.max(
@@ -27,92 +26,32 @@ function presetNameFromValue(value: unknown): string {
 }
 
 export function installLivelyBridge(
-  config: FoldedLatticeConfig,
+  bindings: PropertyBinding[],
   controls: LivelyBridgeControls,
 ): () => void {
   let rebuildTimer = 0;
-  // Every preset defines its own visual baseline. Lively sliders scale that
-  // baseline instead of silently snapping alternate works back to V1 values.
-  const defaults = {
-    nodeCount: config.topology.nodeCount,
-    edgeOpacity: config.render.edgeOpacity,
-    triangleOpacity: config.render.triangleOpacity,
-    pressureMinimumStrength: config.fields.pressure.minimumStrength,
-    pressureMaximumStrength: config.fields.pressure.maximumStrength,
-    pressureMinimumRadius: config.fields.pressure.minimumRadiusRatio,
-    pressureMaximumRadius: config.fields.pressure.maximumRadiusRatio,
-    pressureMinimumSpeed: config.fields.pressure.minimumSpeed,
-    pressureMaximumSpeed: config.fields.pressure.maximumSpeed,
-    ambientSpeed: config.fields.ambient.speed,
-    edgeRestLengthInfluence: config.memory.edgeRestLengthInfluence,
-    pointerStrength: config.fields.pointer.strength,
-  };
 
-  const scheduleRebuild = (): void => {
+  const scheduleTopologyRebuild = (): void => {
     window.clearTimeout(rebuildTimer);
     rebuildTimer = window.setTimeout(controls.rebuildTopology, 120);
   };
 
+  const context: PropertyBindingContext = {
+    rebuildTopology: controls.rebuildTopology,
+    scheduleTopologyRebuild,
+    refreshRenderer: controls.refreshRenderer,
+  };
+  const bindingMap = new Map(
+    bindings.map((binding) => [binding.name, binding]),
+  );
+
   window.livelyPropertyListener = (name, value) => {
-    switch (name) {
-      case "preset":
-        controls.selectPreset(presetNameFromValue(value));
-        break;
-      case "edgeBrightness":
-        config.render.edgeOpacity =
-          defaults.edgeOpacity * (asNumber(value, 55) / 55);
-        break;
-      case "triangleVisibility":
-        config.render.triangleOpacity =
-          defaults.triangleOpacity * (asNumber(value, 20) / 20);
-        break;
-      case "nodeCount":
-        config.topology.nodeCount = Math.round(
-          defaults.nodeCount * (asNumber(value, 100) / 100),
-        );
-        scheduleRebuild();
-        break;
-      case "pressureStrength": {
-        const scale = asNumber(value, 100) / 100;
-        config.fields.pressure.minimumStrength = defaults.pressureMinimumStrength * scale;
-        config.fields.pressure.maximumStrength = defaults.pressureMaximumStrength * scale;
-        break;
-      }
-      case "pressureRadius": {
-        const scale = asNumber(value, 100) / 100;
-        config.fields.pressure.minimumRadiusRatio = defaults.pressureMinimumRadius * scale;
-        config.fields.pressure.maximumRadiusRatio = defaults.pressureMaximumRadius * scale;
-        break;
-      }
-      case "memoryStrength":
-        config.memory.edgeRestLengthInfluence =
-          defaults.edgeRestLengthInfluence * (asNumber(value, 100) / 100);
-        config.memory.enabled = asNumber(value, 100) > 0;
-        break;
-      case "motionSpeed": {
-        const scale = asNumber(value, 100) / 100;
-        config.fields.pressure.minimumSpeed = defaults.pressureMinimumSpeed * scale;
-        config.fields.pressure.maximumSpeed = defaults.pressureMaximumSpeed * scale;
-        config.fields.ambient.speed = defaults.ambientSpeed * scale;
-        break;
-      }
-      case "mouseInteraction":
-        config.fields.pointer.enabled = value === true || value === "true";
-        break;
-      case "mouseStrength":
-        config.fields.pointer.strength =
-          defaults.pointerStrength * (asNumber(value, 100) / 100);
-        break;
-      case "quality": {
-        const quality = asNumber(value, 1);
-        config.performance.maximumDevicePixelRatio = quality <= 0 ? 1 : quality >= 2 ? 2.5 : 2;
-        controls.refreshRenderer();
-        break;
-      }
-      case "targetFps":
-        config.performance.targetFps = asNumber(value, 1) <= 0 ? 30 : 60;
-        break;
+    if (name === "preset") {
+      controls.selectPreset(presetNameFromValue(value));
+      return;
     }
+
+    bindingMap.get(name)?.apply(value, context);
   };
 
   return () => {

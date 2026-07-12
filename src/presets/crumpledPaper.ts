@@ -8,6 +8,13 @@ import { mouseFieldSystem, pointerSmoothingSystem } from "../core/fields/mouseFi
 import { pressureFieldSystem } from "../core/fields/pressureField";
 import { createPaperRenderer } from "../core/render/paperRenderer";
 import { createWebglPaperRenderer } from "../core/render/webglPaperRenderer";
+import {
+  createBooleanBinding,
+  createQualityBinding,
+  createScaledNumberBinding,
+  createTargetFpsBinding,
+} from "../wallpaper/properties";
+import type { PropertyBinding } from "../wallpaper/properties";
 import { springSystem } from "../core/simulation/applySprings";
 import { creaseLifeSystem } from "../core/simulation/creaseLife";
 import { integrationSystem } from "../core/simulation/integrate";
@@ -146,6 +153,59 @@ function createConfig(): FoldedLatticeConfig {
   };
 }
 
+function createPropertyBindings(
+  config: FoldedLatticeConfig,
+): PropertyBinding[] {
+  const defaults = {
+    nodeCount: config.topology.nodeCount,
+    pressureMinimumStrength: config.fields.pressure.minimumStrength,
+    pressureMaximumStrength: config.fields.pressure.maximumStrength,
+    pressureMinimumRadius: config.fields.pressure.minimumRadiusRatio,
+    pressureMaximumRadius: config.fields.pressure.maximumRadiusRatio,
+    pressureMinimumSpeed: config.fields.pressure.minimumSpeed,
+    pressureMaximumSpeed: config.fields.pressure.maximumSpeed,
+    ambientSpeed: config.fields.ambient.speed,
+    pointerStrength: config.fields.pointer.strength,
+  };
+
+  return [
+    createScaledNumberBinding("nodeCount", 100, (scale, context) => {
+      config.topology.nodeCount = Math.round(defaults.nodeCount * scale);
+      context.scheduleTopologyRebuild();
+    }),
+    createScaledNumberBinding("pressureStrength", 100, (scale) => {
+      config.fields.pressure.minimumStrength =
+        defaults.pressureMinimumStrength * scale;
+      config.fields.pressure.maximumStrength =
+        defaults.pressureMaximumStrength * scale;
+    }),
+    createScaledNumberBinding("pressureRadius", 100, (scale) => {
+      config.fields.pressure.minimumRadiusRatio =
+        defaults.pressureMinimumRadius * scale;
+      config.fields.pressure.maximumRadiusRatio =
+        defaults.pressureMaximumRadius * scale;
+    }),
+    createScaledNumberBinding("motionSpeed", 100, (scale) => {
+      config.fields.pressure.minimumSpeed = defaults.pressureMinimumSpeed * scale;
+      config.fields.pressure.maximumSpeed = defaults.pressureMaximumSpeed * scale;
+      config.fields.ambient.speed = defaults.ambientSpeed * scale;
+    }),
+    createBooleanBinding("mouseInteraction", (enabled) => {
+      config.fields.pointer.enabled = enabled;
+    }),
+    createScaledNumberBinding("mouseStrength", 100, (scale) => {
+      config.fields.pointer.strength = defaults.pointerStrength * scale;
+    }),
+    createQualityBinding((maximumDevicePixelRatio, context) => {
+      config.performance.maximumDevicePixelRatio = maximumDevicePixelRatio;
+      context.refreshRenderer();
+    }),
+    createTargetFpsBinding((targetFps) => {
+      config.performance.targetFps = targetFps;
+    }),
+  ];
+}
+
 function createRenderer(
   canvas: HTMLCanvasElement,
   _config: FoldedLatticeConfig,
@@ -180,6 +240,7 @@ export const crumpledPaperPreset: PresetDefinition = {
   createConfig,
   createRenderer,
   topologyBuilder: creaseTopologyBuilder,
+  createPropertyBindings,
   simulationSystems: [
     resetForcesSystem,
     pressureFieldSystem,

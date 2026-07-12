@@ -13,6 +13,13 @@ import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
 import { wandererSystem } from "../core/simulation/wanderer";
 import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
+import {
+  createBooleanBinding,
+  createQualityBinding,
+  createScaledNumberBinding,
+  createTargetFpsBinding,
+} from "../wallpaper/properties";
+import type { PropertyBinding } from "../wallpaper/properties";
 
 function createConfig(): FoldedLatticeConfig {
   return {
@@ -140,6 +147,41 @@ function createConfig(): FoldedLatticeConfig {
   };
 }
 
+function createPropertyBindings(
+  config: FoldedLatticeConfig,
+): PropertyBinding[] {
+  const defaults = {
+    nodeCount: config.topology.nodeCount,
+    triangleOpacity: config.render.triangleOpacity,
+    edgeRestLengthInfluence: config.memory.edgeRestLengthInfluence,
+  };
+
+  return [
+    createScaledNumberBinding("triangleVisibility", 20, (scale) => {
+      config.render.triangleOpacity = defaults.triangleOpacity * scale;
+    }),
+    createScaledNumberBinding("nodeCount", 100, (scale, context) => {
+      config.topology.nodeCount = Math.round(defaults.nodeCount * scale);
+      context.scheduleTopologyRebuild();
+    }),
+    createScaledNumberBinding("memoryStrength", 100, (scale) => {
+      config.memory.edgeRestLengthInfluence =
+        defaults.edgeRestLengthInfluence * scale;
+      config.memory.enabled = scale > 0;
+    }),
+    createBooleanBinding("mouseInteraction", (enabled) => {
+      config.fields.pointer.enabled = enabled;
+    }),
+    createQualityBinding((maximumDevicePixelRatio, context) => {
+      config.performance.maximumDevicePixelRatio = maximumDevicePixelRatio;
+      context.refreshRenderer();
+    }),
+    createTargetFpsBinding((targetFps) => {
+      config.performance.targetFps = targetFps;
+    }),
+  ];
+}
+
 function createRenderer(
   canvas: HTMLCanvasElement,
   _config: FoldedLatticeConfig,
@@ -178,6 +220,7 @@ export const wanderingInkPreset: PresetDefinition = {
   createRenderer,
   applyMode,
   topologyBuilder: delaunayTopologyBuilder,
+  createPropertyBindings,
   simulationSystems: [
     resetForcesSystem,
     wandererSystem,

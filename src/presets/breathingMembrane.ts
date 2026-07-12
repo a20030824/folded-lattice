@@ -5,6 +5,13 @@ import type {
 } from "../core/contracts";
 import { createCanvasRenderer } from "../core/render/canvasRenderer";
 import { createWebglMembraneRenderer } from "../core/render/webglMembraneRenderer";
+import {
+  createBooleanBinding,
+  createQualityBinding,
+  createScaledNumberBinding,
+  createTargetFpsBinding,
+} from "../wallpaper/properties";
+import type { PropertyBinding } from "../wallpaper/properties";
 import { ambientDriftSystem } from "../core/fields/ambientDriftField";
 import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
@@ -158,6 +165,69 @@ function createConfig(): FoldedLatticeConfig {
   };
 }
 
+function createPropertyBindings(
+  config: FoldedLatticeConfig,
+): PropertyBinding[] {
+  const defaults = {
+    nodeCount: config.topology.nodeCount,
+    edgeOpacity: config.render.edgeOpacity,
+    triangleOpacity: config.render.triangleOpacity,
+    pressureMinimumStrength: config.fields.pressure.minimumStrength,
+    pressureMaximumStrength: config.fields.pressure.maximumStrength,
+    pressureMinimumRadius: config.fields.pressure.minimumRadiusRatio,
+    pressureMaximumRadius: config.fields.pressure.maximumRadiusRatio,
+    pressureMinimumSpeed: config.fields.pressure.minimumSpeed,
+    pressureMaximumSpeed: config.fields.pressure.maximumSpeed,
+    ambientSpeed: config.fields.ambient.speed,
+    edgeRestLengthInfluence: config.memory.edgeRestLengthInfluence,
+  };
+
+  return [
+    createScaledNumberBinding("edgeBrightness", 55, (scale) => {
+      config.render.edgeOpacity = defaults.edgeOpacity * scale;
+    }),
+    createScaledNumberBinding("triangleVisibility", 20, (scale) => {
+      config.render.triangleOpacity = defaults.triangleOpacity * scale;
+    }),
+    createScaledNumberBinding("nodeCount", 100, (scale, context) => {
+      config.topology.nodeCount = Math.round(defaults.nodeCount * scale);
+      context.scheduleTopologyRebuild();
+    }),
+    createScaledNumberBinding("pressureStrength", 100, (scale) => {
+      config.fields.pressure.minimumStrength =
+        defaults.pressureMinimumStrength * scale;
+      config.fields.pressure.maximumStrength =
+        defaults.pressureMaximumStrength * scale;
+    }),
+    createScaledNumberBinding("pressureRadius", 100, (scale) => {
+      config.fields.pressure.minimumRadiusRatio =
+        defaults.pressureMinimumRadius * scale;
+      config.fields.pressure.maximumRadiusRatio =
+        defaults.pressureMaximumRadius * scale;
+    }),
+    createScaledNumberBinding("memoryStrength", 100, (scale) => {
+      config.memory.edgeRestLengthInfluence =
+        defaults.edgeRestLengthInfluence * scale;
+      config.memory.enabled = scale > 0;
+    }),
+    createScaledNumberBinding("motionSpeed", 100, (scale) => {
+      config.fields.pressure.minimumSpeed = defaults.pressureMinimumSpeed * scale;
+      config.fields.pressure.maximumSpeed = defaults.pressureMaximumSpeed * scale;
+      config.fields.ambient.speed = defaults.ambientSpeed * scale;
+    }),
+    createBooleanBinding("mouseInteraction", (enabled) => {
+      config.fields.pointer.enabled = enabled;
+    }),
+    createQualityBinding((maximumDevicePixelRatio, context) => {
+      config.performance.maximumDevicePixelRatio = maximumDevicePixelRatio;
+      context.refreshRenderer();
+    }),
+    createTargetFpsBinding((targetFps) => {
+      config.performance.targetFps = targetFps;
+    }),
+  ];
+}
+
 function createRenderer(
   canvas: HTMLCanvasElement,
   _config: FoldedLatticeConfig,
@@ -194,6 +264,7 @@ export const breathingMembranePreset: PresetDefinition = {
   createConfig,
   createRenderer,
   topologyBuilder: delaunayTopologyBuilder,
+  createPropertyBindings,
   simulationSystems: [
     resetForcesSystem,
     pressureFieldSystem,

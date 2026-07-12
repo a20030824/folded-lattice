@@ -1,6 +1,7 @@
 import type { FoldedLatticeConfig } from "./config";
 import type { SimulationState, TopologyState } from "./state";
 import type { Viewport } from "./types";
+import type { PropertyBinding } from "../wallpaper/properties";
 
 export interface TopologyBuilder {
   build(viewport: Viewport, config: FoldedLatticeConfig): TopologyState;
@@ -55,6 +56,8 @@ export interface PresetDefinition {
     config: FoldedLatticeConfig,
     mode: string | null,
   ): void;
+
+  createPropertyBindings(config: FoldedLatticeConfig): PropertyBinding[];
 
   topologyBuilder: TopologyBuilder;
   simulationSystems: SimulationSystem[];
