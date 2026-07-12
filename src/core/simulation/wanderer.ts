@@ -110,10 +110,8 @@ export const wandererSystem: SimulationSystem = {
           1 - distance / frightRadius,
         );
 
-        /*
-        * 持續追逐就累積 fear。
-        * 基礎每秒增加 0.35，貼得越近最多每秒增加 0.65。
-        */
+        // Sustained pursuit builds fear: 0.35/s at the edge of the
+        // fright radius, up to 0.65/s point-blank.
         const fearGainPerSecond =
           0.35 + proximity * 0.3;
 
@@ -143,10 +141,8 @@ export const wandererSystem: SimulationSystem = {
       }
     }
 
-    /*
-    * 沒被追時才慢慢冷靜。
-    * 被追時不衰減，避免一邊增加一邊扣除。
-    */
+    // Calm returns only once the pursuit stops: no decay while being
+    // chased, so gain and decay never fight each other.
     if (!beingPursued) {
       creature.fear *= Math.exp(
         -FEAR_DECAY_PER_SECOND *

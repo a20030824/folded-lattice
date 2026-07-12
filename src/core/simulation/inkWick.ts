@@ -48,7 +48,11 @@ export const inkWickSystem: SimulationSystem = {
     // Each node carries the mean ink of its fibres; edges then relax
     // toward the mean of their two endpoints. Together with drying,
     // this is a slow leak outward along the web.
-    const nodeInk = new Float32Array(nodes.length);
+    if (!state.inkWickScratch || state.inkWickScratch.length !== nodes.length) {
+      state.inkWickScratch = new Float32Array(nodes.length);
+    }
+    const nodeInk = state.inkWickScratch;
+    nodeInk.fill(0);
     for (let index = 0; index < nodes.length; index += 1) {
       const incident = nodes[index]!.edgeIndices;
       if (incident.length === 0) continue;

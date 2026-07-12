@@ -1,5 +1,5 @@
 ﻿import type { Renderer } from "../contracts";
-import { clamp, hash01, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
+import { clamp, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
 import type { Rgb } from "../math";
 import type { Viewport } from "../types";
 
@@ -11,37 +11,49 @@ const RELIEF_SCALE = 1 / 3;
 const RELIEF_BLUR_PX = 5;
 
 /**
- * Wick time is represented by concentration: fresh ink still has a
- * direction, while drying ink has spread into the paper.  Each tier is
- * rasterized below display resolution and composited once, so fibres melt
- * together instead of every edge receiving its own fuzzy halo.
+ * The wick field renders as ONE soft stain, far below display
+ * resolution: individual fibres melt into a feathered wash and nothing
+ * line-like survives. Absorbed ink is a damp blot on the paper, never
+ * a drawn element - drawn elements at this size read as creatures.
  */
-const FIBER_LAYERS = [
-  {
-    minimumLevel: 0.15,
-    scale: 0.58,
-    blur: 0.8,
-    width: 1.05,
-    alphaGain: 0.21,
-    maximumAlpha: 0.15,
-  },
-  {
-    minimumLevel: 0.095,
-    scale: 0.32,
-    blur: 2.1,
-    width: 1.7,
-    alphaGain: 0.4,
-    maximumAlpha: 0.13,
-  },
-  {
-    minimumLevel: 0.06,
-    scale: 0.2,
-    blur: 4.2,
-    width: 2.7,
-    alphaGain: 0.55,
-    maximumAlpha: 0.1,
-  },
-] as const;
+const STAIN_SCALE = 0.2;
+/** Display-space blur of the composited stain. */
+const STAIN_BLUR_PX = 4;
+/** Ink below this level leaves no visible mark. */
+const STAIN_FLOOR = 0.03;
+/** Width of one wet fibre's swath, in display pixels. */
+const STAIN_SWATH_PX = 14;
+/** Ceiling on the stain's darkness over the paper. */
+const STAIN_OPACITY = 0.22;
+
+/**
+ * Static paper grain, alpha-only: multiplied into the stain each frame
+ * (destination-in) so the blot's fringe feathers along fixed fibres
+ * instead of ending in a smooth vignette. Spatially frozen on purpose -
+ * texture that moves reads as something alive.
+ */
+function paintGrain(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
+  const image = context.createImageData(width, height);
+  const data = image.data;
+  let offset = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const fine = valueNoise2D(x * 0.58, y * 0.58);
+      const cloud = valueNoise2D(x * 0.13 + 91.7, y * 0.13 + 41.3);
+      const fibre = clamp(fine * 0.55 + cloud * 0.45);
+      data[offset + 0] = 255;
+      data[offset + 1] = 255;
+      data[offset + 2] = 255;
+      data[offset + 3] = Math.round(70 + 185 * fibre * fibre);
+      offset += 4;
+    }
+  }
+  context.putImageData(image, 0, 0);
+}
 
 const SHADE_LUT_STEPS = 32;
 const INK_LUT_STEPS = 14;
@@ -195,10 +207,10 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
   const tailSurface = document.createElement("canvas");
   const tailContext = tailSurface.getContext("2d")!;
   let renderPixelRatio = 1;
-  const fibreLayers = FIBER_LAYERS.map((settings) => {
-    const surface = document.createElement("canvas");
-    return { ...settings, surface, context: surface.getContext("2d")! };
-  });
+  const stain = document.createElement("canvas");
+  const stainContext = stain.getContext("2d")!;
+  const grain = document.createElement("canvas");
+  const grainContext = grain.getContext("2d")!;
 
   return {
     resize(nextViewport, maximumDevicePixelRatio) {
@@ -214,25 +226,8 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       canvas.style.height = `${nextViewport.height}px`;
       tailSurface.width = canvas.width;
       tailSurface.height = canvas.height;
+      tailContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
 
-      tailContext.setTransform(
-        renderPixelRatio,
-        0,
-        0,
-        renderPixelRatio,
-        0,
-        0,
-      );
-
-      // 原本主畫布的設定
-      context.setTransform(
-        pixelRatio,
-        0,
-        0,
-        pixelRatio,
-        0,
-        0,
-      );
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.lineCap = "round";
       context.lineJoin = "round";
@@ -349,277 +344,147 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       context.filter = "none";
       context.globalAlpha = 1;
 
-      // The soaked fibres: ink that left the body wicks outward along
-      // the triangle edges. Fresh paths retain a little fibre direction;
-      // drying paths are lower-res and blurrier, absorbed back into paper.
-      // The lattice is only ever visible where ink has touched it.
+      // The soaked ground: ink that left the body wicks outward along
+      // the paper's fibre web (inkWick), and the whole field is pressed
+      // into ONE soft stain. A damp blot with a feathered, grain-mottled
+      // fringe - no strand, no line, nothing that could read as a body.
+      // The field evolves continuously, so the wash cannot flicker.
       const edgeInk = state.edgeInk;
       const creature = state.creature;
       if (edgeInk && edgeInk.length === state.topology.edges.length) {
-        for (const layer of fibreLayers) {
-          const width = Math.max(2, Math.round(viewport.width * layer.scale));
-          const height = Math.max(2, Math.round(viewport.height * layer.scale));
-          if (layer.surface.width !== width || layer.surface.height !== height) {
-            layer.surface.width = width;
-            layer.surface.height = height;
-          }
-          layer.context.setTransform(layer.scale, 0, 0, layer.scale, 0, 0);
-          layer.context.clearRect(0, 0, viewport.width, viewport.height);
-          layer.context.strokeStyle = palette.inkSolid;
-          layer.context.lineCap = "round";
-          layer.context.lineJoin = "round";
-          layer.context.lineWidth = layer.width;
-        }
-        const edges = state.topology.edges;
-        const flickerTime = state.time.elapsed * 0.55;
-        const veinShortSide = Math.max(
-          1,
-          Math.min(viewport.width, viewport.height),
+        const stainWidth = Math.max(
+          2,
+          Math.round(viewport.width * STAIN_SCALE),
         );
-        // Nothing bleeds beside the crisp head (judge's call): veins
-        // are suppressed inside this radius and ramp in beyond it.
-        const headPoint =
-          creature && creature.points.length > 0
-            ? creature.points[creature.points.length - 1]!
-            : undefined;
-        const maskInner = veinShortSide * 0.08;
-        const maskOuter = veinShortSide * 0.18;
+        const stainHeight = Math.max(
+          2,
+          Math.round(viewport.height * STAIN_SCALE),
+        );
+        if (stain.width !== stainWidth || stain.height !== stainHeight) {
+          stain.width = stainWidth;
+          stain.height = stainHeight;
+          grain.width = stainWidth;
+          grain.height = stainHeight;
+          paintGrain(grainContext, stainWidth, stainHeight);
+        }
+        stainContext.setTransform(STAIN_SCALE, 0, 0, STAIN_SCALE, 0, 0);
+        stainContext.clearRect(0, 0, viewport.width, viewport.height);
+        stainContext.strokeStyle = palette.inkSolid;
+        stainContext.lineCap = "round";
+        stainContext.lineWidth = STAIN_SWATH_PX;
+
+        const edges = state.topology.edges;
         for (let index = 0; index < edges.length; index += 1) {
           const level = edgeInk[index]!;
-          if (level < 0.06) continue;
-          // Rare, intermittent strands (judge's call, twice now):
-          // four fibres in five never conduct visibly, and the rest
-          // come and go in slow fits.
-          const porosity = hash01(index * 2654435761);
-          if (porosity < 0.8) continue;
-          const flicker = valueNoise2D(index * 0.83, flickerTime);
-          if (flicker < 0.42) continue;
+          if (level < STAIN_FLOOR) continue;
           const edge = edges[index]!;
           const a = nodes[edge.nodeA];
           const b = nodes[edge.nodeB];
           if (!a || !b || (a.pinned && b.pinned)) continue;
-          let mask = 1;
-          if (headPoint) {
-            const midX = (a.position.x + b.position.x) * 0.5;
-            const midY = (a.position.y + b.position.y) * 0.5;
-            const headDistance = Math.hypot(
-              midX - headPoint.x,
-              midY - headPoint.y,
-            );
-            mask = clamp((headDistance - maskInner) / (maskOuter - maskInner));
-          }
-          const layer =
-            level >= FIBER_LAYERS[0].minimumLevel
-              ? fibreLayers[0]!
-              : level >= FIBER_LAYERS[1].minimumLevel
-                ? fibreLayers[1]!
-                : fibreLayers[2]!;
-          // True ink that thins to nothing: constant colour, falling
-          // alpha - the strand goes transparent, never grey. Older,
-          // wider layers receive a little more pigment before diffusion.
-          const alpha =
-            Math.min(layer.maximumAlpha, level * layer.alphaGain) * mask;
-          if (alpha < 0.012) continue;
-          layer.context.globalAlpha = alpha;
-          layer.context.beginPath();
-          layer.context.moveTo(a.position.x, a.position.y);
-          layer.context.lineTo(b.position.x, b.position.y);
-          layer.context.stroke();
+          stainContext.globalAlpha = Math.min(0.42, level * 0.5);
+          stainContext.beginPath();
+          stainContext.moveTo(a.position.x, a.position.y);
+          stainContext.lineTo(b.position.x, b.position.y);
+          stainContext.stroke();
         }
-        // Paint old absorption first, then let newer fibres sit on top.
-        for (let index = fibreLayers.length - 1; index >= 0; index -= 1) {
-          const layer = fibreLayers[index]!;
-          context.globalAlpha = 1;
-          context.filter = `blur(${layer.blur}px)`;
-          context.drawImage(layer.surface, 0, 0, viewport.width, viewport.height);
-        }
+
+        // Feather the fringe with the paper's own (static) grain.
+        stainContext.setTransform(1, 0, 0, 1, 0, 0);
+        stainContext.globalAlpha = 1;
+        stainContext.globalCompositeOperation = "destination-in";
+        stainContext.drawImage(grain, 0, 0);
+        stainContext.globalCompositeOperation = "source-over";
+
+        context.globalAlpha = STAIN_OPACITY;
+        context.filter = `blur(${STAIN_BLUR_PX}px)`;
+        context.drawImage(stain, 0, 0, viewport.width, viewport.height);
         context.filter = "none";
         context.globalAlpha = 1;
       }
       context.globalAlpha = 1;
       // The creature: one continuous brush stroke, tail melting into
-// the paper, width recorded from its pace when each point was laid.
-const creatureConfig = config.creature;
+      // the paper, width recorded from its pace when each point was laid.
+      const creatureConfig = config.creature;
+      if (creature && creatureConfig && creature.points.length > 1) {
+        const shortSide = Math.max(
+          1,
+          Math.min(viewport.width, viewport.height),
+        );
+        const maximumWidth = creatureConfig.inkWidthRatio * shortSide;
+        const points = creature.points;
+        const count = points.length;
+        const tailEndIndex = Math.min(
+          count - 1,
+          Math.max(1, Math.floor((count - 1) * 0.25)),
+        );
 
-if (creature && creatureConfig && creature.points.length > 1) {
-  const shortSide = Math.max(
-    1,
-    Math.min(viewport.width, viewport.height),
-  );
+        // Draw the fade per segment, using progress along the sampled
+        // body as the arc-length axis. A start-to-end linear gradient
+        // degenerates when a curled tail's endpoints nearly coincide.
+        tailContext.setTransform(
+          renderPixelRatio,
+          0,
+          0,
+          renderPixelRatio,
+          0,
+          0,
+        );
+        tailContext.clearRect(0, 0, viewport.width, viewport.height);
+        tailContext.globalAlpha = 1;
+        tailContext.globalCompositeOperation = "source-over";
+        tailContext.strokeStyle = palette.inkSolid;
+        tailContext.lineCap = "round";
+        tailContext.lineJoin = "round";
 
-  const maximumWidth =
-    creatureConfig.inkWidthRatio * shortSide;
+        for (let index = 1; index <= tailEndIndex; index += 1) {
+          const from = points[index - 1]!;
+          const to = points[index]!;
+          // 0 at the tail tip, 1 where the tail joins the body.
+          const tailProgress = index / tailEndIndex;
+          // Smooth thin-to-thick ramp along the tail.
+          const tailWidthTaper =
+            tailProgress * tailProgress * (3 - 2 * tailProgress);
+          tailContext.globalAlpha = tailWidthTaper;
+          const bodyArc = index / (count - 1);
+          // Same head-sharpening rule as the body stroke below.
+          const headTaper = 0.55 + 0.45 * clamp((1 - bodyArc) / 0.045);
+          tailContext.lineWidth = Math.max(
+            0.4,
+            maximumWidth * to.widthFactor * tailWidthTaper * headTaper,
+          );
+          tailContext.beginPath();
+          tailContext.moveTo(from.x, from.y);
+          tailContext.lineTo(to.x, to.y);
+          tailContext.stroke();
+        }
 
-  const points = creature.points;
-  const count = points.length;
+        // The finished translucent tail lands on the main canvas.
+        context.globalAlpha = 1;
+        context.drawImage(tailSurface, 0, 0, viewport.width, viewport.height);
 
-  const tailEndIndex = Math.min(
-    count - 1,
-    Math.max(
-      1,
-      Math.floor((count - 1) * 0.25),
-    ),
-  );
-
-  /*
-   * 先把尾巴以完整墨色畫到獨立透明 Canvas。
-   * 每段可以保有自己的寬度，但透明度還不在這裡處理。
-   */
-  tailContext.setTransform(
-    renderPixelRatio,
-    0,
-    0,
-    renderPixelRatio,
-    0,
-    0,
-  );
-
-  tailContext.clearRect(
-    0,
-    0,
-    viewport.width,
-    viewport.height,
-  );
-
-  tailContext.globalAlpha = 1;
-  tailContext.globalCompositeOperation = "source-over";
-  tailContext.strokeStyle = palette.inkSolid;
-  tailContext.lineCap = "round";
-  tailContext.lineJoin = "round";
-
-  for (
-    let index = 1;
-    index <= tailEndIndex;
-    index += 1
-  ) {
-    const from = points[index - 1]!;
-    const to = points[index]!;
-
-    // 0 = 最尾端，1 = 接上身體
-    const tailProgress =
-      index / tailEndIndex;
-
-    // 平滑地由細變粗
-    const tailWidthTaper =
-      tailProgress *
-      tailProgress *
-      (3 - 2 * tailProgress);
-
-    const bodyArc =
-      index / (count - 1);
-
-    // 保留原本頭部收尖的規則
-    const headTaper =
-      0.55 +
-      0.45 *
-        clamp((1 - bodyArc) / 0.045);
-
-    tailContext.lineWidth = Math.max(
-      0.4,
-      maximumWidth *
-        to.widthFactor *
-        tailWidthTaper *
-        headTaper,
-    );
-
-    tailContext.beginPath();
-    tailContext.moveTo(from.x, from.y);
-    tailContext.lineTo(to.x, to.y);
-    tailContext.stroke();
-  }
-
-  /*
-   * 尾巴現在已經是一個完整形狀。
-   * 接著用 destination-in 一次裁出透明漸層。
-   */
-  const tailStart = points[0]!;
-  const tailEnd = points[tailEndIndex]!;
-
-  const alphaGradient =
-    tailContext.createLinearGradient(
-      tailStart.x,
-      tailStart.y,
-      tailEnd.x,
-      tailEnd.y,
-    );
-
-  alphaGradient.addColorStop(
-    0,
-    "rgba(0, 0, 0, 0)",
-  );
-
-  alphaGradient.addColorStop(
-    1,
-    "rgba(0, 0, 0, 1)",
-  );
-
-  tailContext.globalCompositeOperation =
-    "destination-in";
-
-  tailContext.fillStyle = alphaGradient;
-
-  tailContext.fillRect(
-    0,
-    0,
-    viewport.width,
-    viewport.height,
-  );
-
-  tailContext.globalCompositeOperation =
-    "source-over";
-
-  // 把處理完成的透明尾巴畫回主畫面
-  context.globalAlpha = 1;
-
-  context.drawImage(
-    tailSurface,
-    0,
-    0,
-    viewport.width,
-    viewport.height,
-  );
-
-  /*
-   * 接著畫正常身體。
-   * 繼續直接使用原始 points 和 widthFactor。
-   */
-  context.globalAlpha = 1;
-  context.strokeStyle = palette.inkSolid;
-  context.lineCap = "round";
-  context.lineJoin = "round";
-
-  for (
-    let index = tailEndIndex + 1;
-    index < count;
-    index += 1
-  ) {
-    const from = points[index - 1]!;
-    const to = points[index]!;
-    const arc = index / (count - 1);
-
-    const taper =
-      clamp(arc / 0.06) *
-      (
-        0.55 +
-        0.45 *
-          clamp((1 - arc) / 0.045)
-      );
-
-    context.lineWidth = Math.max(
-      0.4,
-      maximumWidth *
-        to.widthFactor *
-        taper,
-    );
-
-    context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(to.x, to.y);
-    context.stroke();
-  }
-
-  context.globalAlpha = 1;
-}
+        // The body proper, straight onto the main canvas from the raw
+        // points and their recorded widthFactor.
+        context.globalAlpha = 1;
+        context.strokeStyle = palette.inkSolid;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        for (let index = tailEndIndex + 1; index < count; index += 1) {
+          const from = points[index - 1]!;
+          const to = points[index]!;
+          const arc = index / (count - 1);
+          const taper =
+            clamp(arc / 0.06) * (0.55 + 0.45 * clamp((1 - arc) / 0.045));
+          context.lineWidth = Math.max(
+            0.4,
+            maximumWidth * to.widthFactor * taper,
+          );
+          context.beginPath();
+          context.moveTo(from.x, from.y);
+          context.lineTo(to.x, to.y);
+          context.stroke();
+        }
+        context.globalAlpha = 1;
+      }
 
       context.globalAlpha = 1;
     },
@@ -631,10 +496,10 @@ if (creature && creatureConfig && creature.points.length > 1) {
       relief.height = 1;
       tailSurface.width = 1;
       tailSurface.height = 1;
-      for (const layer of fibreLayers) {
-        layer.surface.width = 1;
-        layer.surface.height = 1;
-      }
+      stain.width = 1;
+      stain.height = 1;
+      grain.width = 1;
+      grain.height = 1;
     },
   };
 }
