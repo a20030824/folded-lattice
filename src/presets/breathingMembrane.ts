@@ -1,5 +1,9 @@
 import type { FoldedLatticeConfig } from "../core/config";
 import { ModuleConfigStore } from "../core/moduleConfig";
+import {
+  pulseConfigKey,
+  type PulseConfig,
+} from "../features/membrane/config";
 import type {
   PresetDefinition,
   PresetRendererResult,
@@ -28,7 +32,7 @@ import { geometrySystem } from "../core/simulation/updateGeometry";
 import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
 
 function createConfig(): FoldedLatticeConfig {
-  return {
+  const config: FoldedLatticeConfig = {
   topology: {
     nodeCount: 260,
     minimumDistanceRatio: 0.043,
@@ -137,17 +141,6 @@ function createConfig(): FoldedLatticeConfig {
     maximumDevicePixelRatio: 2,
   },
   modules: new ModuleConfigStore(),
-  pulse: {
-    enabled: true,
-    intervalSeconds: 3,
-    speedRatio: 0.1,
-    bandRatio: 0.055,
-    falloffRatio: 0.24,
-    memoryDeposit: 0.55,
-    kickStrength: 5600,
-    memoryOriginChance: 0.55,
-    pointerTrigger: true,
-  },
   membraneWave: {
     enabled: true,
     impactRadiusRatio: 0.038,
@@ -165,6 +158,20 @@ function createConfig(): FoldedLatticeConfig {
     maximum: 0.3,
   },
   };
+
+  const pulseConfig: PulseConfig = {
+    enabled: true,
+    intervalSeconds: 3,
+    speedRatio: 0.1,
+    bandRatio: 0.055,
+    falloffRatio: 0.24,
+    memoryDeposit: 0.55,
+    kickStrength: 5600,
+    memoryOriginChance: 0.55,
+    pointerTrigger: true,
+  };
+  config.modules.set(pulseConfigKey, pulseConfig);
+  return config;
 }
 
 function createPropertyBindings(

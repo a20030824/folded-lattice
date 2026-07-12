@@ -1,5 +1,6 @@
 import type { SimulationSystem } from "../contracts";
 import { createRandom } from "../math";
+import { pulseConfigKey } from "../../features/membrane/config";
 import type { EdgeState, NodeState, SimulationState } from "../state";
 
 /**
@@ -143,7 +144,7 @@ function spawnPulse(
 export const membranePulseSystem: SimulationSystem = {
   name: "membrane-pulse",
   update(state, config, deltaSeconds) {
-    const settings = config.pulse;
+    const settings = config.modules.get(pulseConfigKey);
     if (!settings?.enabled) return;
     const { nodes, edges } = state.topology;
     if (nodes.length === 0) return;
