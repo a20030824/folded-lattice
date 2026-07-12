@@ -1,8 +1,10 @@
 import type { FoldedLatticeConfig } from "../core/config";
 import { ModuleConfigStore } from "../core/moduleConfig";
 import {
+  legacyMemoryConfigKey,
   membraneWaveConfigKey,
   pulseConfigKey,
+  type LegacyMemoryConfig,
   type MembraneWaveConfig,
   type PulseConfig,
 } from "../features/membrane/config";
@@ -143,14 +145,16 @@ function createConfig(): FoldedLatticeConfig {
     maximumDevicePixelRatio: 2,
   },
   modules: new ModuleConfigStore(),
-  legacy: {
+  };
+
+  const legacyMemoryConfig: LegacyMemoryConfig = {
     enabled: true,
     depositRate: 0.05,
     diffusionRate: 0.35,
     decaySeconds: 220,
     maximum: 0.3,
-  },
   };
+  config.modules.set(legacyMemoryConfigKey, legacyMemoryConfig);
 
   const membraneWaveConfig: MembraneWaveConfig = {
     enabled: true,

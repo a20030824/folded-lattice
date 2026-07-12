@@ -1,4 +1,5 @@
 import type { SimulationSystem } from "../contracts";
+import { legacyMemoryConfigKey } from "../../features/membrane/config";
 
 /**
  * A second, much slower memory layer. Where memoryBias tracks the
@@ -11,7 +12,7 @@ import type { SimulationSystem } from "../contracts";
 export const legacyMemorySystem: SimulationSystem = {
   name: "legacy-memory",
   update(state, config, deltaSeconds) {
-    const settings = config.legacy;
+    const settings = config.modules.get(legacyMemoryConfigKey);
     if (!settings?.enabled) return;
 
     const { edges, triangles } = state.topology;
