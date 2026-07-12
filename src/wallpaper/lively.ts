@@ -9,6 +9,7 @@ declare global {
 interface LivelyBridgeControls {
   rebuildTopology(): void;
   refreshRenderer(): void;
+  selectPreset(name: string): void;
 }
 
 function asNumber(value: unknown, fallback: number): number {
@@ -17,22 +18,12 @@ function asNumber(value: unknown, fallback: number): number {
 }
 
 const presetNames = ["paper", "ink", "membrane", "tide"] as const;
-const presetStorageKey = "folded-lattice-preset";
-
-function selectPreset(value: unknown): void {
+function presetNameFromValue(value: unknown): string {
   const index = Math.max(
     0,
     Math.min(presetNames.length - 1, Math.round(asNumber(value, 0))),
   );
-  const target = presetNames[index]!;
-  const current =
-    window.localStorage.getItem(presetStorageKey) ??
-    new URLSearchParams(window.location.search).get("preset") ??
-    "paper";
-  if (current === target) return;
-
-  window.localStorage.setItem(presetStorageKey, target);
-  window.location.reload();
+  return presetNames[index]!;
 }
 
 export function installLivelyBridge(
@@ -65,7 +56,7 @@ export function installLivelyBridge(
   window.livelyPropertyListener = (name, value) => {
     switch (name) {
       case "preset":
-        selectPreset(value);
+        controls.selectPreset(presetNameFromValue(value));
         break;
       case "edgeBrightness":
         config.render.edgeOpacity =

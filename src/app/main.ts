@@ -1,6 +1,8 @@
 import "./styles.css";
 
 import { createEngine } from "../core/createEngine";
+import type { FoldedLatticeEngine } from "../core/createEngine";
+import type { PresetDefinition } from "../core/contracts";
 import { createCanvasRenderer } from "../core/render/canvasRenderer";
 import { createContourRenderer } from "../core/render/contourRenderer";
 import { createInkRenderer } from "../core/render/inkRenderer";
@@ -25,23 +27,20 @@ const getViewport = (): Viewport => ({
 });
 
 const urlParameters = new URLSearchParams(window.location.search);
-const presetName =
-  urlParameters.get("preset") ??
-  window.localStorage.getItem("folded-lattice-preset");
-const preset =
-  presetName === "ink"
-    ? wanderingInkPreset
-    : presetName === "tide" || presetName === "archive"
-      ? tideArchivePreset
-      : presetName === "membrane"
-        ? breathingMembranePreset
-        : crumpledPaperPreset;
+
+function resolvePreset(name: string | null): PresetDefinition {
+  if (name === "ink") return wanderingInkPreset;
+  if (name === "tide" || name === "archive") return tideArchivePreset;
+  if (name === "membrane") return breathingMembranePreset;
+  return crumpledPaperPreset;
+}
 
 // Authored personalities for the wandering ink: same rules, different
 // bodies. ?mode=serpent (long, slow, thin) or ?mode=hatchling (short,
 // quick, skittish); the default is the loner.
 const mode = urlParameters.get("mode");
-if (preset === wanderingInkPreset && preset.config.creature) {
+function applyInkMode(preset: PresetDefinition): void {
+  if (preset.id !== "wandering-ink" || !preset.config.creature) return;
   const creature = preset.config.creature;
   if (mode === "serpent") {
     creature.trailCount = 340;
@@ -109,36 +108,77 @@ function createRendererFor(
     return createPaperRenderer(replacement);
   }
 }
-const renderer = createRendererFor(preset.id);
-const engine = createEngine(preset, renderer, getViewport());
-// Debug handles for tuning sessions; harmless in production wallpapers.
-(window as unknown as { __engine: typeof engine }).__engine = engine;
-(window as unknown as { __config: typeof preset.config }).__config = preset.config;
-const unbindPointer = bindPointerInput(canvas, engine.getState);
-const removeLivelyBridge = installLivelyBridge(preset.config, {
-  rebuildTopology: engine.rebuildTopology,
-  refreshRenderer: () => engine.resize(getViewport()),
-});
+interface ActiveRuntime {
+  presetId: string;
+  engine: FoldedLatticeEngine;
+  unbindPointer(): void;
+  removeLivelyBridge(): void;
+}
+
+let runtime: ActiveRuntime | null = null;
+
+function replaceCanvas(): void {
+  const replacement = canvas!.cloneNode(false) as HTMLCanvasElement;
+  canvas!.replaceWith(replacement);
+  canvas = replacement;
+}
+
+function startPreset(name: string | null): void {
+  const definition = resolvePreset(name);
+  if (runtime?.presetId === definition.id) return;
+
+  if (runtime) {
+    runtime.unbindPointer();
+    runtime.removeLivelyBridge();
+    runtime.engine.dispose();
+    replaceCanvas();
+  }
+
+  const preset: PresetDefinition = {
+    ...definition,
+    config: structuredClone(definition.config),
+  };
+  applyInkMode(preset);
+
+  const renderer = createRendererFor(preset.id);
+  const engine = createEngine(preset, renderer, getViewport());
+  const unbindPointer = bindPointerInput(canvas!, engine.getState);
+  const removeLivelyBridge = installLivelyBridge(preset.config, {
+    rebuildTopology: engine.rebuildTopology,
+    refreshRenderer: () => engine.resize(getViewport()),
+    selectPreset: startPreset,
+  });
+
+  runtime = { presetId: preset.id, engine, unbindPointer, removeLivelyBridge };
+  // Debug handles for tuning sessions; harmless in production wallpapers.
+  (window as unknown as { __engine: typeof engine }).__engine = engine;
+  (window as unknown as { __config: typeof preset.config }).__config = preset.config;
+  if (!document.hidden) engine.start();
+}
 
 let resizeTimer = 0;
 const onResize = (): void => {
   window.clearTimeout(resizeTimer);
-  resizeTimer = window.setTimeout(() => engine.resize(getViewport()), 150);
+  resizeTimer = window.setTimeout(
+    () => runtime?.engine.resize(getViewport()),
+    150,
+  );
 };
 const onVisibilityChange = (): void => {
-  if (document.hidden) engine.stop();
-  else engine.start();
+  if (document.hidden) runtime?.engine.stop();
+  else runtime?.engine.start();
 };
 const dispose = (): void => {
   window.clearTimeout(resizeTimer);
   window.removeEventListener("resize", onResize);
   document.removeEventListener("visibilitychange", onVisibilityChange);
-  unbindPointer();
-  removeLivelyBridge();
-  engine.dispose();
+  runtime?.unbindPointer();
+  runtime?.removeLivelyBridge();
+  runtime?.engine.dispose();
+  runtime = null;
 };
 
 window.addEventListener("resize", onResize);
 window.addEventListener("beforeunload", dispose, { once: true });
 document.addEventListener("visibilitychange", onVisibilityChange);
-engine.start();
+startPreset(urlParameters.get("preset"));
