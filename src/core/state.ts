@@ -56,6 +56,12 @@ export interface TriangleState {
   visibility: number;
   phase: number;
   neighborIndices: number[];
+  /**
+   * Slow, mesh-diffused trace of where tension pulses have repeatedly
+   * passed. Independent of memoryBias (which follows the local fold):
+   * this one spreads to neighbors and decays over minutes, not seconds.
+   */
+  legacy: number;
 }
 
 export type FieldKind = "pressure" | "ambient-drift" | "pointer" | "phase";
@@ -249,6 +255,10 @@ export interface SimulationState {
    * wicks slowly outward along them, fading as it travels.
    */
   edgeInk?: Float32Array;
+  /** Reused by ink diffusion to avoid allocating once per simulation tick. */
+  inkWickScratch?: Float32Array;
+  /** Reused by triangle-memory diffusion to avoid per-tick garbage. */
+  legacyScratch?: Float32Array;
 }
 
 export function createEmptySimulationState(viewport: Viewport): SimulationState {

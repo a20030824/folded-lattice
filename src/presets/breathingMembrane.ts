@@ -3,6 +3,7 @@ import type { PresetDefinition } from "../core/contracts";
 import { ambientDriftSystem } from "../core/fields/ambientDriftField";
 import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
+import { legacyMemorySystem } from "../core/memory/updateLegacy";
 import { memorySystem } from "../core/memory/updateMemory";
 import { revealSystem } from "../core/reveal/updateReveal";
 import { springSystem } from "../core/simulation/applySprings";
@@ -123,12 +124,12 @@ const config: FoldedLatticeConfig = {
   },
   pulse: {
     enabled: true,
-    intervalSeconds: 7,
+    intervalSeconds: 3,
     speedRatio: 0.1,
     bandRatio: 0.055,
     falloffRatio: 0.24,
     memoryDeposit: 0.55,
-    kickStrength: 1600,
+    kickStrength: 5600,
     memoryOriginChance: 0.55,
     pointerTrigger: true,
   },
@@ -140,6 +141,13 @@ const config: FoldedLatticeConfig = {
     dragSpacingRatio: 0.025,
     dragStrength: 1500,
     dragSeconds: 0.09,
+  },
+  legacy: {
+    enabled: true,
+    depositRate: 0.05,
+    diffusionRate: 0.35,
+    decaySeconds: 220,
+    maximum: 0.3,
   },
 };
 
@@ -160,6 +168,7 @@ export const breathingMembranePreset: PresetDefinition = {
     integrationSystem,
     geometrySystem,
     memorySystem,
+    legacyMemorySystem,
   ],
   frameSystems: [pointerSmoothingSystem, revealSystem],
 };

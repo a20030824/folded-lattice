@@ -746,6 +746,7 @@ export function buildTopologyFromCreaseField(
       visibility: 1,
       phase: hash01(id * 31 + seed),
       neighborIndices: [],
+      legacy: 0,
     });
 
     a.triangleIndices.push(id);

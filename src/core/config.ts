@@ -387,6 +387,24 @@ export interface CreatureConfig {
   inkWidthRatio: number;
 }
 
+/**
+ * A slow second memory layer for triangles, independent of memoryBias.
+ * It deposits from live pulse activity, diffuses to neighboring
+ * triangles each step (so its shape bleeds like a stain rather than
+ * tracing the pulse's exact geodesic front), and decays over minutes.
+ */
+export interface LegacyMemoryConfig {
+  enabled: boolean;
+  /** Legacy gained per second under a fully-lit pulse front. */
+  depositRate: number;
+  /** Fraction relaxed toward the neighbor average per second. */
+  diffusionRate: number;
+  /** Time constant of the slow exponential decay. */
+  decaySeconds: number;
+  /** Clamp, kept low so the trace stays a faint bias, not a scar. */
+  maximum: number;
+}
+
 export interface FoldedLatticeConfig {
   topology: TopologyConfig;
   physics: PhysicsConfig;
@@ -400,4 +418,5 @@ export interface FoldedLatticeConfig {
   pulse?: PulseConfig;
   membraneWave?: MembraneWaveConfig;
   creature?: CreatureConfig;
+  legacy?: LegacyMemoryConfig;
 }
