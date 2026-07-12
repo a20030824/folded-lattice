@@ -16,6 +16,23 @@ function asNumber(value: unknown, fallback: number): number {
   return Number.isFinite(number) ? number : fallback;
 }
 
+const presetQueries = ["", "ink", "membrane", "tide"] as const;
+
+function selectPreset(value: unknown): void {
+  const index = Math.max(
+    0,
+    Math.min(presetQueries.length - 1, Math.round(asNumber(value, 0))),
+  );
+  const target = presetQueries[index]!;
+  const parameters = new URLSearchParams(window.location.search);
+  const current = parameters.get("preset") ?? "";
+  if (current === target || (target === "" && current === "paper")) return;
+
+  if (target) parameters.set("preset", target);
+  else parameters.delete("preset");
+  window.location.search = parameters.toString();
+}
+
 export function installLivelyBridge(
   config: FoldedLatticeConfig,
   controls: LivelyBridgeControls,
@@ -45,6 +62,9 @@ export function installLivelyBridge(
 
   window.livelyPropertyListener = (name, value) => {
     switch (name) {
+      case "preset":
+        selectPreset(value);
+        break;
       case "edgeBrightness":
         config.render.edgeOpacity =
           defaults.edgeOpacity * (asNumber(value, 55) / 55);
