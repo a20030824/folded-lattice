@@ -5,6 +5,7 @@ import { createCanvasRenderer } from "../core/render/canvasRenderer";
 import { createContourRenderer } from "../core/render/contourRenderer";
 import { createInkRenderer } from "../core/render/inkRenderer";
 import { createPaperRenderer } from "../core/render/paperRenderer";
+import { createWebglMembraneRenderer } from "../core/render/webglMembraneRenderer";
 import { createWebglPaperRenderer } from "../core/render/webglPaperRenderer";
 import type { Viewport } from "../core/types";
 import { breathingMembranePreset } from "../presets/breathingMembrane";
@@ -13,7 +14,6 @@ import { tideArchivePreset } from "../presets/tideArchive";
 import { wanderingInkPreset } from "../presets/wanderingInk";
 import { installLivelyBridge } from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
-import {createWebglMembraneRenderer,} from "../core/render/webglMembraneRenderer";
 
 let canvas = document.querySelector<HTMLCanvasElement>("#wallpaper");
 if (!canvas) throw new Error('Canvas element "#wallpaper" was not found.');
@@ -74,8 +74,8 @@ function createRendererFor(
         error,
       );
 
-      // 取得過 WebGL context 的 canvas 不能再穩定取得 2D context，
-      // 所以 fallback 前必須換成一張新的 canvas。
+      // A canvas that has handed out a WebGL context cannot reliably
+      // provide a 2D one afterwards, so swap in a fresh canvas first.
       const replacement =
         canvas!.cloneNode(false) as HTMLCanvasElement;
 
@@ -118,17 +118,17 @@ const removeLivelyBridge = installLivelyBridge(preset.config, {
   refreshRenderer: () => engine.resize(getViewport()),
 });
 
-let resizeFrame = 0;
+let resizeTimer = 0;
 const onResize = (): void => {
-  cancelAnimationFrame(resizeFrame);
-  resizeFrame = requestAnimationFrame(() => engine.resize(getViewport()));
+  window.clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(() => engine.resize(getViewport()), 150);
 };
 const onVisibilityChange = (): void => {
   if (document.hidden) engine.stop();
   else engine.start();
 };
 const dispose = (): void => {
-  cancelAnimationFrame(resizeFrame);
+  window.clearTimeout(resizeTimer);
   window.removeEventListener("resize", onResize);
   document.removeEventListener("visibilitychange", onVisibilityChange);
   unbindPointer();

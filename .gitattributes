@@ -1,0 +1,7 @@
+* text=auto
+.gitattributes text eol=lf
+*.ts text eol=lf
+*.glsl text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
