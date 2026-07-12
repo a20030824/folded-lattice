@@ -77,7 +77,7 @@ export function installLivelyBridge(
         break;
       case "nodeCount":
         config.topology.nodeCount = Math.round(
-          defaults.nodeCount * (asNumber(value, 120) / 120),
+          defaults.nodeCount * (asNumber(value, 100) / 100),
         );
         scheduleRebuild();
         break;

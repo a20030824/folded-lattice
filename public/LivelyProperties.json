@@ -29,13 +29,13 @@
     "value": 20
   },
   "nodeCount": {
-    "max": 220,
-    "min": 60,
-    "step": 5,
-    "text": "Node count",
+    "max": 250,
+    "min": 50,
+    "step": 10,
+    "text": "Mesh density (%)",
     "type": "slider",
-    "help": "Structural density; changing this rebuilds the lattice",
-    "value": 120
+    "help": "More nodes produce more triangular faces; changing this rebuilds the mesh",
+    "value": 100
   },
   "pressureStrength": {
     "max": 180,
