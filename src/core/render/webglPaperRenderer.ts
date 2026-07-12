@@ -1,5 +1,6 @@
 import type { Renderer } from "../contracts";
 import { clamp, parseColor } from "../math";
+import { creaseConfigKey } from "../../features/crease/config";
 import type { CreaseState, SimulationState, TopologyState } from "../state";
 import type { Viewport } from "../types";
 
@@ -517,7 +518,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     },
 
     render(state, config) {
-      const settings = config.crease;
+      const settings = config.modules.get(creaseConfigKey);
       if (!settings) return;
       if (state.topology.triangles.length === 0) return;
 

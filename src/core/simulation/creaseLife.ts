@@ -1,5 +1,6 @@
 import type { SimulationSystem } from "../contracts";
 import { clamp, createRandom } from "../math";
+import { creaseConfigKey } from "../../features/crease/config";
 import type { CreaseFieldState, CreaseState, SimulationState } from "../state";
 import {
   buildCreaseState,
@@ -197,7 +198,7 @@ export const creaseLifeSystem: SimulationSystem = {
   name: "crease-life",
   update(state, config, deltaSeconds) {
     const field = state.topology.creaseField;
-    const settings = config.crease;
+    const settings = config.modules.get(creaseConfigKey);
     const life = settings?.life;
     if (!field || !settings || !life?.enabled) return;
 

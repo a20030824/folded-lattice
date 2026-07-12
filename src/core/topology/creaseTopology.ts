@@ -1,6 +1,11 @@
 import Delaunator from "delaunator";
 
-import type { CreaseConfig, CreaseLifeConfig, FoldedLatticeConfig } from "../config";
+import { creaseConfigKey } from "../../features/crease/config";
+import type {
+  CreaseConfig,
+  CreaseLifeConfig,
+} from "../../features/crease/config";
+import type { FoldedLatticeConfig } from "../config";
 import type {
   CreaseEdgeState,
   CreaseFieldState,
@@ -394,7 +399,7 @@ export function buildTopologyFromCreaseField(
   scatterSeed: number,
   carryPoints?: { x: number; y: number }[],
 ): TopologyState {
-  const settings = config.crease ?? fallbackCrease;
+  const settings = config.modules.get(creaseConfigKey) ?? fallbackCrease;
   const seed = field.waveSeed;
   const random = createRandom(scatterSeed);
   const shortSide = Math.min(viewport.width, viewport.height);
@@ -779,7 +784,7 @@ export function buildTopologyFromCreaseField(
 
 export const creaseTopologyBuilder = {
   build(viewport: Viewport, config: FoldedLatticeConfig): TopologyState {
-    const settings = config.crease ?? fallbackCrease;
+    const settings = config.modules.get(creaseConfigKey) ?? fallbackCrease;
     const seed = config.topology.randomSeed;
     const field = generateCreaseField(viewport, settings, settings.life, seed);
     return buildTopologyFromCreaseField(viewport, config, field, seed + 7717);

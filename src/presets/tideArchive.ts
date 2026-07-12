@@ -1,6 +1,10 @@
 import type { FoldedLatticeConfig } from "../core/config";
 import { ModuleConfigStore } from "../core/moduleConfig";
 import {
+  creaseConfigKey,
+  type CreaseConfig,
+} from "../features/crease/config";
+import {
   contourConfigKey,
   type ContourConfig,
 } from "../features/tideArchive/config";
@@ -122,7 +126,9 @@ function createConfig(): FoldedLatticeConfig {
     maximumDevicePixelRatio: 2,
   },
   modules: new ModuleConfigStore(),
-  crease: {
+  };
+
+  const creaseConfig: CreaseConfig = {
     majorCount: 4,
     minorCount: 7,
     amplitudeRatio: 0.065,
@@ -140,8 +146,8 @@ function createConfig(): FoldedLatticeConfig {
     ridgeColor: "#000000",
     shadowTint: "#000000",
     curliness: 0.02,
-  },
   };
+  config.modules.set(creaseConfigKey, creaseConfig);
 
   const contourConfig: ContourConfig = {
     cycleSeconds: 30,

@@ -1,4 +1,7 @@
-import type { CreaseConfig } from "../config";
+import {
+  creaseConfigKey,
+  type CreaseConfig,
+} from "../../features/crease/config";
 import type { Renderer } from "../contracts";
 import { clamp, hash01, mixRgb, parseColor, rgbString } from "../math";
 import type { NodeState } from "../state";
@@ -114,7 +117,7 @@ export function createPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     },
 
     render(state, config) {
-      const settings = config.crease;
+      const settings = config.modules.get(creaseConfigKey);
       if (!settings) return;
       const { nodes, triangles, creaseEdges, edges } = state.topology;
       const render = config.render;

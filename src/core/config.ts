@@ -166,99 +166,6 @@ export interface PerformanceConfig {
   maximumDevicePixelRatio: number;
 }
 
-/**
- * Crumpled-sheet presets: fold-line network, density-varying sampling,
- * and the paper renderer's material parameters. Ratios are of the
- * viewport's short side.
- */
-export interface CreaseConfig {
-  majorCount: number;
-  minorCount: number;
-
-  /**
-   * Peak rest-pose height of a full-strength crease.
-   */
-  amplitudeRatio: number;
-  majorWidthRatio: number;
-  minorWidthRatio: number;
-
-  /**
-   * Node spacing along crease lines.
-   */
-  creaseSpacingRatio: number;
-  /**
-   * Sampling min-distance next to creases vs. in open facets.
-   */
-  nearDensityRatio: number;
-  farDensityRatio: number;
-  /**
-   * Distance over which sampling density decays to sparse.
-   */
-  densityFalloffRatio: number;
-
-  grainOpacity: number;
-  valleyShadowStrength: number;
-  ridgeLightStrength: number;
-
-  paperLit: string;
-  paperShadow: string;
-  ridgeColor: string;
-  /**
-   * Occluded areas sink toward this tint, never toward black - shadows
-   * have a color of their own.
-   */
-  shadowTint: string;
-
-  /**
-   * Curvature of fold lines in radians per walk step; real creases are
-   * near-straight but never ruler-straight.
-   */
-  curliness: number;
-
-  life?: CreaseLifeConfig;
-}
-
-/**
- * Slow life cycle of the fold network: new creases grow tip-forward,
- * mature ones fade or get pressed flat, and a long press by the pointer
- * sets a fresh fold. All timescales are in seconds.
- */
-export interface CreaseLifeConfig {
-  enabled: boolean;
-  /**
-   * Average pause between spontaneous fold events.
-   */
-  spawnIntervalSeconds: number;
-  growSeconds: number;
-  /**
-   * Typical lifetime of a minor fold before it has fully healed.
-   */
-  fadeSeconds: number;
-  /**
-   * Hold duration after which a pressed pointer sets a new crease.
-   */
-  pressSeconds: number;
-  maximumMinorCount: number;
-  /**
-   * The skeleton iterates too, on a much longer period: about this often
-   * one major fold hands over to a newly grown one. 0 disables.
-   */
-  majorIntervalSeconds: number;
-  /**
-   * The major count itself may drift inside these bounds: a handover
-   * sometimes only retires, sometimes only grows. Both default to the
-   * built count when absent.
-   */
-  minimumMajorCount?: number;
-  maximumMajorCount?: number;
-  /**
-   * Event-rate multiplier while nobody is at the desk (pointer absent
-   * for a while) - the paper lives a little faster when unwatched.
-   * 1 or absent disables.
-   */
-  idleRateBoost?: number;
-}
-
 export interface FoldedLatticeConfig {
   topology: TopologyConfig;
   physics: PhysicsConfig;
@@ -268,5 +175,4 @@ export interface FoldedLatticeConfig {
   render: RenderConfig;
   performance: PerformanceConfig;
   modules: ModuleConfigStore;
-  crease?: CreaseConfig;
 }

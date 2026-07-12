@@ -1,5 +1,9 @@
 import type { FoldedLatticeConfig } from "../core/config";
 import { ModuleConfigStore } from "../core/moduleConfig";
+import {
+  creaseConfigKey,
+  type CreaseConfig,
+} from "../features/crease/config";
 import type {
   PresetDefinition,
   PresetRendererResult,
@@ -24,7 +28,7 @@ import { geometrySystem } from "../core/simulation/updateGeometry";
 import { creaseTopologyBuilder } from "../core/topology/creaseTopology";
 
 function createConfig(): FoldedLatticeConfig {
-  return {
+  const config: FoldedLatticeConfig = {
   topology: {
     nodeCount: 380,
     minimumDistanceRatio: 0.05,
@@ -121,7 +125,9 @@ function createConfig(): FoldedLatticeConfig {
     maximumDevicePixelRatio: 2,
   },
   modules: new ModuleConfigStore(),
-  crease: {
+  };
+
+  const creaseConfig: CreaseConfig = {
     majorCount: 3,
     minorCount: 9,
     amplitudeRatio: 0.045,
@@ -151,8 +157,9 @@ function createConfig(): FoldedLatticeConfig {
       maximumMajorCount: 4,
       idleRateBoost: 1.5,
     },
-  },
   };
+  config.modules.set(creaseConfigKey, creaseConfig);
+  return config;
 }
 
 function createPropertyBindings(
