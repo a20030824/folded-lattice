@@ -50,7 +50,7 @@ src/
 
 ## Presets
 
-- `http://localhost:5173/` — Wandering Ink
-- `http://localhost:5173/?preset=membrane` — Breathing Membrane
-- `http://localhost:5173/?preset=paper` — Crumpled Paper
-- `http://localhost:5173/?preset=tide` — Tide Archive
+- [Wandering Ink](https://a20030824.github.io/folded-lattice/)
+- [Breathing Membrane](https://a20030824.github.io/folded-lattice/?preset=membrane)
+- [Crumpled Paper](https://a20030824.github.io/folded-lattice/?preset=paper)
+- [Tide Archive](https://a20030824.github.io/folded-lattice/?preset=tide)
