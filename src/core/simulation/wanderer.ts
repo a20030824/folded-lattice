@@ -1,6 +1,8 @@
 ﻿import type { SimulationSystem } from "../contracts";
 import { clamp, valueNoise2D } from "../math";
-import type { CreatureState, SimulationState } from "../state";
+import { getInkRuntime } from "../../features/wanderingInk/state";
+import type { CreatureState } from "../../features/wanderingInk/types";
+import type { SimulationState } from "../state";
 
 /**
  * Fear fades over ~6 seconds: leaving the fright radius does not mean
@@ -74,10 +76,12 @@ export const wandererSystem: SimulationSystem = {
     const settings = config.creature;
     if (!settings?.enabled) return;
 
-    if (!state.creature) {
-      state.creature = createCreature(state, config.topology.randomSeed);
+    const runtime = getInkRuntime(state);
+    let creature = runtime.creature;
+    if (!creature) {
+      creature = createCreature(state, config.topology.randomSeed);
+      runtime.creature = creature;
     }
-    const creature = state.creature;
     const width = state.viewport.width;
     const height = state.viewport.height;
     const shortSide = Math.max(1, Math.min(width, height));

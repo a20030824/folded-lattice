@@ -2,6 +2,7 @@
 import { clamp, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
 import type { Rgb } from "../math";
 import type { Viewport } from "../types";
+import { getInkRuntime } from "../../features/wanderingInk/state";
 
 /**
  * The relief is rasterized small and blurred up: facets melt into one
@@ -349,8 +350,9 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       // into ONE soft stain. A damp blot with a feathered, grain-mottled
       // fringe - no strand, no line, nothing that could read as a body.
       // The field evolves continuously, so the wash cannot flicker.
-      const edgeInk = state.edgeInk;
-      const creature = state.creature;
+      const runtime = getInkRuntime(state);
+      const edgeInk = runtime.edgeInk;
+      const creature = runtime.creature;
       if (edgeInk && edgeInk.length === state.topology.edges.length) {
         const stainWidth = Math.max(
           2,

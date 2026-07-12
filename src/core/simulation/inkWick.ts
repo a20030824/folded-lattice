@@ -1,5 +1,6 @@
 import type { SimulationSystem } from "../contracts";
 import { clamp } from "../math";
+import { getInkRuntime } from "../../features/wanderingInk/state";
 import type { SimulationState } from "../state";
 
 /**
@@ -20,11 +21,12 @@ const WICK_RATE = 0.45;
 const DRINK_RADIUS_RATIO = 0.02;
 
 function ensureInk(state: SimulationState): Float32Array {
+  const runtime = getInkRuntime(state);
   const count = state.topology.edges.length;
-  if (!state.edgeInk || state.edgeInk.length !== count) {
-    state.edgeInk = new Float32Array(count);
+  if (!runtime.edgeInk || runtime.edgeInk.length !== count) {
+    runtime.edgeInk = new Float32Array(count);
   }
-  return state.edgeInk;
+  return runtime.edgeInk;
 }
 
 /**
@@ -38,6 +40,7 @@ export const inkWickSystem: SimulationSystem = {
   name: "ink-wick",
   update(state, config, deltaSeconds) {
     if (!config.creature?.enabled) return;
+    const runtime = getInkRuntime(state);
     const ink = ensureInk(state);
     const { nodes, edges } = state.topology;
     const shortSide = Math.max(
@@ -48,10 +51,10 @@ export const inkWickSystem: SimulationSystem = {
     // Each node carries the mean ink of its fibres; edges then relax
     // toward the mean of their two endpoints. Together with drying,
     // this is a slow leak outward along the web.
-    if (!state.inkWickScratch || state.inkWickScratch.length !== nodes.length) {
-      state.inkWickScratch = new Float32Array(nodes.length);
+    if (!runtime.wickScratch || runtime.wickScratch.length !== nodes.length) {
+      runtime.wickScratch = new Float32Array(nodes.length);
     }
-    const nodeInk = state.inkWickScratch;
+    const nodeInk = runtime.wickScratch;
     nodeInk.fill(0);
     for (let index = 0; index < nodes.length; index += 1) {
       const incident = nodes[index]!.edgeIndices;
@@ -75,7 +78,7 @@ export const inkWickSystem: SimulationSystem = {
     // to soak through, so the fibres light up where the line WAS
     // seconds ago, never under the crisp head. The delay is physical -
     // the tail arrives there long after the head has left.
-    const creature = state.creature;
+    const creature = runtime.creature;
     const points = creature?.points ?? [];
     const count = points.length;
     if (count > 64) {
