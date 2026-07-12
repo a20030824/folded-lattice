@@ -16,21 +16,23 @@ function asNumber(value: unknown, fallback: number): number {
   return Number.isFinite(number) ? number : fallback;
 }
 
-const presetQueries = ["", "ink", "membrane", "tide"] as const;
+const presetNames = ["paper", "ink", "membrane", "tide"] as const;
+const presetStorageKey = "folded-lattice-preset";
 
 function selectPreset(value: unknown): void {
   const index = Math.max(
     0,
-    Math.min(presetQueries.length - 1, Math.round(asNumber(value, 0))),
+    Math.min(presetNames.length - 1, Math.round(asNumber(value, 0))),
   );
-  const target = presetQueries[index]!;
-  const parameters = new URLSearchParams(window.location.search);
-  const current = parameters.get("preset") ?? "";
-  if (current === target || (target === "" && current === "paper")) return;
+  const target = presetNames[index]!;
+  const current =
+    window.localStorage.getItem(presetStorageKey) ??
+    new URLSearchParams(window.location.search).get("preset") ??
+    "paper";
+  if (current === target) return;
 
-  if (target) parameters.set("preset", target);
-  else parameters.delete("preset");
-  window.location.search = parameters.toString();
+  window.localStorage.setItem(presetStorageKey, target);
+  window.location.reload();
 }
 
 export function installLivelyBridge(

@@ -25,7 +25,9 @@ const getViewport = (): Viewport => ({
 });
 
 const urlParameters = new URLSearchParams(window.location.search);
-const presetName = urlParameters.get("preset");
+const presetName =
+  urlParameters.get("preset") ??
+  window.localStorage.getItem("folded-lattice-preset");
 const preset =
   presetName === "ink"
     ? wanderingInkPreset
