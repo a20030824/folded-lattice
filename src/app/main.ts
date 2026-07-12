@@ -27,13 +27,13 @@ const getViewport = (): Viewport => ({
 const urlParameters = new URLSearchParams(window.location.search);
 const presetName = urlParameters.get("preset");
 const preset =
-  presetName === "paper"
-    ? crumpledPaperPreset
+  presetName === "ink"
+    ? wanderingInkPreset
     : presetName === "tide" || presetName === "archive"
       ? tideArchivePreset
       : presetName === "membrane"
         ? breathingMembranePreset
-        : wanderingInkPreset;
+        : crumpledPaperPreset;
 
 // Authored personalities for the wandering ink: same rules, different
 // bodies. ?mode=serpent (long, slow, thin) or ?mode=hatchling (short,

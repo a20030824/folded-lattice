@@ -50,7 +50,7 @@ src/
 
 ## Presets
 
-- [Wandering Ink](https://a20030824.github.io/folded-lattice/)
+- [Wandering Ink](https://a20030824.github.io/folded-lattice/?preset=ink)
 - [Breathing Membrane](https://a20030824.github.io/folded-lattice/?preset=membrane)
 - [Crumpled Paper](https://a20030824.github.io/folded-lattice/?preset=paper)
 - [Tide Archive](https://a20030824.github.io/folded-lattice/?preset=tide)
