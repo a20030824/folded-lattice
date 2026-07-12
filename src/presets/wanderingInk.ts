@@ -1,7 +1,11 @@
 ﻿import type { FoldedLatticeConfig } from "../core/config";
-import type { PresetDefinition } from "../core/contracts";
+import type {
+  PresetDefinition,
+  PresetRendererResult,
+} from "../core/contracts";
 import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { memorySystem } from "../core/memory/updateMemory";
+import { createInkRenderer } from "../core/render/inkRenderer";
 import { springSystem } from "../core/simulation/applySprings";
 import { integrationSystem } from "../core/simulation/integrate";
 import { inkWickSystem } from "../core/simulation/inkWick";
@@ -10,7 +14,8 @@ import { geometrySystem } from "../core/simulation/updateGeometry";
 import { wandererSystem } from "../core/simulation/wanderer";
 import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
 
-const config: FoldedLatticeConfig = {
+function createConfig(): FoldedLatticeConfig {
+  return {
   topology: {
     // Dense weave (judge's call, twice now): fine facets so the
     // relief reads as paper grain, not a coarse crystal cloud.
@@ -132,14 +137,46 @@ const config: FoldedLatticeConfig = {
     carveRadiusRatio: 0.065,
     inkWidthRatio: 0.005,
   },
-};
+  };
+}
+
+function createRenderer(
+  canvas: HTMLCanvasElement,
+  _config: FoldedLatticeConfig,
+): PresetRendererResult {
+  return {
+    canvas,
+    renderer: createInkRenderer(canvas),
+  };
+}
+
+function applyMode(config: FoldedLatticeConfig, mode: string | null): void {
+  const creature = config.creature;
+  if (!creature) return;
+
+  if (mode === "serpent") {
+    creature.trailCount = 340;
+    creature.baseSpeedRatio = 0.068;
+    creature.inkWidthRatio = 0.0042;
+    creature.wanderStrength = 1.3;
+  } else if (mode === "hatchling") {
+    creature.trailCount = 70;
+    creature.baseSpeedRatio = 0.125;
+    creature.inkWidthRatio = 0.0062;
+    creature.pointerRepelRadiusRatio = 0.3;
+    creature.pointerSpeedBoost = 1.6;
+  }
+}
 
 export const wanderingInkPreset: PresetDefinition = {
   id: "wandering-ink",
+  aliases: ["ink", "wandering-ink"],
   displayName: "Wandering Ink",
   description:
     "A single ink line roams a sheet of pale paper, denting the ground it walks on; the pointer can only frighten it, never touch the paper.",
-  config,
+  createConfig,
+  createRenderer,
+  applyMode,
   topologyBuilder: delaunayTopologyBuilder,
   simulationSystems: [
     resetForcesSystem,

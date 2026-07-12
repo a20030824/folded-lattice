@@ -1,8 +1,13 @@
 import type { FoldedLatticeConfig } from "../core/config";
-import type { PresetDefinition } from "../core/contracts";
+import type {
+  PresetDefinition,
+  PresetRendererResult,
+} from "../core/contracts";
 import { ambientDriftSystem } from "../core/fields/ambientDriftField";
 import { mouseFieldSystem, pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
+import { createPaperRenderer } from "../core/render/paperRenderer";
+import { createWebglPaperRenderer } from "../core/render/webglPaperRenderer";
 import { springSystem } from "../core/simulation/applySprings";
 import { creaseLifeSystem } from "../core/simulation/creaseLife";
 import { integrationSystem } from "../core/simulation/integrate";
@@ -10,7 +15,8 @@ import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
 import { creaseTopologyBuilder } from "../core/topology/creaseTopology";
 
-const config: FoldedLatticeConfig = {
+function createConfig(): FoldedLatticeConfig {
+  return {
   topology: {
     nodeCount: 380,
     minimumDistanceRatio: 0.05,
@@ -137,14 +143,42 @@ const config: FoldedLatticeConfig = {
       idleRateBoost: 1.5,
     },
   },
-};
+  };
+}
+
+function createRenderer(
+  canvas: HTMLCanvasElement,
+  _config: FoldedLatticeConfig,
+): PresetRendererResult {
+  try {
+    return {
+      canvas,
+      renderer: createWebglPaperRenderer(canvas),
+    };
+  } catch (error) {
+    console.error(
+      "WebGL paper renderer unavailable, falling back:",
+      error,
+    );
+
+    const replacement = canvas.cloneNode(false) as HTMLCanvasElement;
+    canvas.replaceWith(replacement);
+
+    return {
+      canvas: replacement,
+      renderer: createPaperRenderer(replacement),
+    };
+  }
+}
 
 export const crumpledPaperPreset: PresetDefinition = {
   id: "crumpled-paper",
+  aliases: ["paper", "crumpled-paper"],
   displayName: "Crumpled Paper",
   description:
     "A sheet of dark paper crumpled into ridges and valleys, breathing under a fixed cold light.",
-  config,
+  createConfig,
+  createRenderer,
   topologyBuilder: creaseTopologyBuilder,
   simulationSystems: [
     resetForcesSystem,

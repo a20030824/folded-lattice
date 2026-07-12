@@ -1,5 +1,10 @@
 import type { FoldedLatticeConfig } from "../core/config";
-import type { PresetDefinition } from "../core/contracts";
+import type {
+  PresetDefinition,
+  PresetRendererResult,
+} from "../core/contracts";
+import { createCanvasRenderer } from "../core/render/canvasRenderer";
+import { createWebglMembraneRenderer } from "../core/render/webglMembraneRenderer";
 import { ambientDriftSystem } from "../core/fields/ambientDriftField";
 import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
@@ -14,7 +19,8 @@ import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
 import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
 
-const config: FoldedLatticeConfig = {
+function createConfig(): FoldedLatticeConfig {
+  return {
   topology: {
     nodeCount: 260,
     minimumDistanceRatio: 0.043,
@@ -149,14 +155,44 @@ const config: FoldedLatticeConfig = {
     decaySeconds: 220,
     maximum: 0.3,
   },
-};
+  };
+}
+
+function createRenderer(
+  canvas: HTMLCanvasElement,
+  _config: FoldedLatticeConfig,
+): PresetRendererResult {
+  try {
+    return {
+      canvas,
+      renderer: createWebglMembraneRenderer(canvas),
+    };
+  } catch (error) {
+    console.error(
+      "WebGL membrane renderer unavailable, falling back:",
+      error,
+    );
+
+    // A canvas that has handed out a WebGL context cannot reliably
+    // provide a 2D one afterwards, so swap in a fresh canvas first.
+    const replacement = canvas.cloneNode(false) as HTMLCanvasElement;
+    canvas.replaceWith(replacement);
+
+    return {
+      canvas: replacement,
+      renderer: createCanvasRenderer(replacement),
+    };
+  }
+}
 
 export const breathingMembranePreset: PresetDefinition = {
   id: "breathing-membrane",
+  aliases: ["membrane", "breathing-membrane"],
   displayName: "Breathing Membrane",
   description:
     "A quiet triangular membrane shaped by pressure, tension, and fading structural memory.",
-  config,
+  createConfig,
+  createRenderer,
   topologyBuilder: delaunayTopologyBuilder,
   simulationSystems: [
     resetForcesSystem,

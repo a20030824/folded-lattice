@@ -1,16 +1,21 @@
 import type { FoldedLatticeConfig } from "../core/config";
-import type { PresetDefinition } from "../core/contracts";
+import type {
+  PresetDefinition,
+  PresetRendererResult,
+} from "../core/contracts";
 import { ambientDriftSystem } from "../core/fields/ambientDriftField";
 import { mouseFieldSystem, pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
 import { memorySystem } from "../core/memory/updateMemory";
+import { createContourRenderer } from "../core/render/contourRenderer";
 import { springSystem } from "../core/simulation/applySprings";
 import { integrationSystem } from "../core/simulation/integrate";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
 import { creaseTopologyBuilder } from "../core/topology/creaseTopology";
 
-const config: FoldedLatticeConfig = {
+function createConfig(): FoldedLatticeConfig {
+  return {
   topology: {
     nodeCount: 320,
     minimumDistanceRatio: 0.045,
@@ -145,14 +150,27 @@ const config: FoldedLatticeConfig = {
     legacyWidth: 0.94,
     legacySpatialGrid: 3,
   },
-};
+  };
+}
+
+function createRenderer(
+  canvas: HTMLCanvasElement,
+  _config: FoldedLatticeConfig,
+): PresetRendererResult {
+  return {
+    canvas,
+    renderer: createContourRenderer(canvas),
+  };
+}
 
 export const tideArchivePreset: PresetDefinition = {
   id: "tide-archive",
+  aliases: ["tide", "archive", "tide-archive"],
   displayName: "Tide Archive",
   description:
     "An invisible folded field revealed only where a slow tide of height intersects it.",
-  config,
+  createConfig,
+  createRenderer,
   topologyBuilder: creaseTopologyBuilder,
   simulationSystems: [
     resetForcesSystem,

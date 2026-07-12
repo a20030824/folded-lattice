@@ -1,4 +1,5 @@
 import type { PresetDefinition, Renderer } from "./contracts";
+import type { FoldedLatticeConfig } from "./config";
 import { createEmptySimulationState } from "./state";
 import type { SimulationState } from "./state";
 import type { Viewport } from "./types";
@@ -14,10 +15,10 @@ export interface FoldedLatticeEngine {
 
 export function createEngine(
   preset: PresetDefinition,
+  config: FoldedLatticeConfig,
   renderer: Renderer,
   initialViewport: Viewport,
 ): FoldedLatticeEngine {
-  const config = preset.config;
   const state = createEmptySimulationState(initialViewport);
   state.time.fixedDelta = 1 / config.performance.fixedSimulationFps;
   state.topology = preset.topologyBuilder.build(initialViewport, config);

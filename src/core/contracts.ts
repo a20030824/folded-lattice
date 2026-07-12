@@ -33,11 +33,29 @@ export interface Renderer {
   dispose(): void;
 }
 
+export interface PresetRendererResult {
+  canvas: HTMLCanvasElement;
+  renderer: Renderer;
+}
+
 export interface PresetDefinition {
   id: string;
+  aliases: readonly string[];
   displayName: string;
   description: string;
-  config: FoldedLatticeConfig;
+
+  createConfig(): FoldedLatticeConfig;
+
+  createRenderer(
+    canvas: HTMLCanvasElement,
+    config: FoldedLatticeConfig,
+  ): PresetRendererResult;
+
+  applyMode?(
+    config: FoldedLatticeConfig,
+    mode: string | null,
+  ): void;
+
   topologyBuilder: TopologyBuilder;
   simulationSystems: SimulationSystem[];
   frameSystems: FrameSystem[];
