@@ -21,7 +21,12 @@ export function createEngine(
 ): FoldedLatticeEngine {
   const state = createEmptySimulationState(initialViewport);
   state.time.fixedDelta = 1 / config.performance.fixedSimulationFps;
-  state.topology = preset.topologyBuilder.build(initialViewport, config);
+  const applyTopologyBuild = (viewport: Viewport): void => {
+    const result = preset.topologyBuilder.build(viewport, config);
+    state.topology = result.topology;
+    result.initializeResources?.(state.resources);
+  };
+  applyTopologyBuild(initialViewport);
   renderer.resize(initialViewport, config.performance.maximumDevicePixelRatio);
 
   let animationFrameId = 0;
@@ -31,7 +36,7 @@ export function createEngine(
   let accumulator = 0;
 
   const rebuildTopology = (): void => {
-    state.topology = preset.topologyBuilder.build(state.viewport, config);
+    applyTopologyBuild(state.viewport);
     state.fields = [];
     accumulator = 0;
   };

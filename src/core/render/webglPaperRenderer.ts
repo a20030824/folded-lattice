@@ -1,7 +1,12 @@
 import type { Renderer } from "../contracts";
 import { clamp, parseColor } from "../math";
 import { creaseConfigKey } from "../../features/crease/config";
-import type { CreaseState, SimulationState, TopologyState } from "../state";
+import {
+  creaseRuntimeKey,
+  type CreaseRuntimeState,
+  type CreaseState,
+} from "../../features/crease/state";
+import type { SimulationState, TopologyState } from "../state";
 import type { Viewport } from "../types";
 
 /**
@@ -166,8 +171,12 @@ interface TopologyCrossfade {
   outgoingMesh: MeshBinding;
 }
 
-function buildMeshBinding(topology: TopologyState): MeshBinding {
-  const { nodes, edges, triangles, creaseEdges } = topology;
+function buildMeshBinding(
+  topology: TopologyState,
+  runtime: CreaseRuntimeState,
+): MeshBinding {
+  const { nodes, edges, triangles } = topology;
+  const { creaseEdges, nodeTags } = runtime;
   const vertexCount = triangles.length * 3;
 
   // Nodes that sit on a crease, with the crease direction through them.
@@ -230,7 +239,7 @@ function buildMeshBinding(topology: TopologyState): MeshBinding {
       for (const adjacent of node.triangleIndices) groups.push(adjacent);
       groupAllCounts[vertex] = node.triangleIndices.length;
 
-      const tag = node.creaseTag;
+      const tag = nodeTags[nodeIndex];
       if (tag && creaseDirection.has(nodeIndex)) {
         vertexCreaseId[vertex] = tag.creaseId;
         vertexFromOrigin[vertex] = tag.fromOrigin;
@@ -362,7 +371,7 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
     // healing fold softens everywhere, and a rail whose crease is gone
     // simply smooths like open paper.
     const creaseById = new Map<number, CreaseState>();
-    const field = state.topology.creaseField;
+    const field = state.resources.get(creaseRuntimeKey)?.creaseField;
     if (field) {
       for (const crease of field.creases) creaseById.set(crease.id, crease);
     }
@@ -521,12 +530,14 @@ export function createWebglPaperRenderer(canvas: HTMLCanvasElement): Renderer {
       const settings = config.modules.get(creaseConfigKey);
       if (!settings) return;
       if (state.topology.triangles.length === 0) return;
+      const runtime = state.resources.get(creaseRuntimeKey);
+      if (!runtime) return;
 
       if (!mesh || mesh.topology !== state.topology) {
         if (mesh) {
           crossfade = { startedAt: state.time.elapsed, outgoingMesh: mesh };
         }
-        mesh = buildMeshBinding(state.topology);
+        mesh = buildMeshBinding(state.topology, runtime);
         uploadStatic();
       }
 

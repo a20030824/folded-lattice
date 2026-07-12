@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "test": "npx --yes vite-node tests/creaseTopology.characterization.ts",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -1,15 +1,23 @@
 import Delaunator from "delaunator";
 
+import {
+  creaseRuntimeKey,
+  getCreaseRuntime,
+} from "../../features/crease/state";
 import { creaseConfigKey } from "../../features/crease/config";
 import type {
   CreaseConfig,
   CreaseLifeConfig,
 } from "../../features/crease/config";
-import type { FoldedLatticeConfig } from "../config";
 import type {
   CreaseEdgeState,
   CreaseFieldState,
+  CreaseNodeTag,
   CreaseState,
+} from "../../features/crease/state";
+import type { TopologyBuildResult } from "../contracts";
+import type { FoldedLatticeConfig } from "../config";
+import type {
   EdgeState,
   NodeState,
   SimulationState,
@@ -19,10 +27,28 @@ import type {
 import type { Viewport } from "../types";
 import { clamp, createRandom, hash01, smoothstep, valueNoise2D } from "../math";
 
-interface CreaseNodeTag {
+interface BuildCreaseNodeTag {
   creaseId: number;
   sequence: number;
   fromOrigin: number;
+}
+
+function createCreaseBuildResult(
+  topology: TopologyState,
+  field: CreaseFieldState,
+  creaseEdges: CreaseEdgeState[],
+  nodeTags: Array<CreaseNodeTag | undefined>,
+): TopologyBuildResult {
+  return {
+    topology,
+    initializeResources(resources) {
+      resources.set(creaseRuntimeKey, {
+        creaseEdges,
+        creaseField: field,
+        nodeTags,
+      });
+    },
+  };
 }
 
 interface WalkBounds {
@@ -398,7 +424,7 @@ export function buildTopologyFromCreaseField(
   field: CreaseFieldState,
   scatterSeed: number,
   carryPoints?: { x: number; y: number }[],
-): TopologyState {
+): TopologyBuildResult {
   const settings = config.modules.get(creaseConfigKey) ?? fallbackCrease;
   const seed = field.waveSeed;
   const random = createRandom(scatterSeed);
@@ -422,7 +448,7 @@ export function buildTopologyFromCreaseField(
 
   // 1. Nodes along the crease lines, so mesh edges align with folds.
   const points: { x: number; y: number }[] = [];
-  const creaseTags = new Map<number, CreaseNodeTag>();
+  const creaseTags = new Map<number, BuildCreaseNodeTag>();
   const baseSpacing = shortSide * settings.creaseSpacingRatio;
 
   for (const crease of creases) {
@@ -572,7 +598,12 @@ export function buildTopologyFromCreaseField(
   }
 
   if (points.length < 3) {
-    return { nodes: [], edges: [], triangles: [], creaseEdges: [] };
+    return createCreaseBuildResult(
+      { nodes: [], edges: [], triangles: [] },
+      field,
+      [],
+      [],
+    );
   }
 
   // 3b. Relax open-facet nodes toward their neighbors: sparse regions
@@ -625,9 +656,14 @@ export function buildTopologyFromCreaseField(
   // 4. Crumple the rest pose before edges exist, so rest lengths are 3D.
   const delaunay = Delaunator.from(points, (point) => point.x, (point) => point.y);
   const hullNodes = new Set<number>(delaunay.hull);
+  const nodeTags: Array<CreaseNodeTag | undefined> = points.map((_, id) => {
+    const tag = creaseTags.get(id);
+    return tag
+      ? { creaseId: tag.creaseId, fromOrigin: tag.fromOrigin }
+      : undefined;
+  });
   const nodes: NodeState[] = points.map((point, id) => {
     const z = evaluateCreaseField(point.x, point.y, field);
-    const tag = creaseTags.get(id);
     return {
       id,
       position: { x: point.x, y: point.y, z },
@@ -641,9 +677,6 @@ export function buildTopologyFromCreaseField(
       pinned: config.topology.pinBoundary && hullNodes.has(id),
       edgeIndices: [],
       triangleIndices: [],
-      creaseTag: tag
-        ? { creaseId: tag.creaseId, fromOrigin: tag.fromOrigin }
-        : undefined,
     };
   });
 
@@ -779,11 +812,16 @@ export function buildTopologyFromCreaseField(
     creaseEdge.triangleB = owners[1] ?? -1;
   }
 
-  return { nodes, edges, triangles, creaseEdges, creaseField: field };
+  return createCreaseBuildResult(
+    { nodes, edges, triangles },
+    field,
+    creaseEdges,
+    nodeTags,
+  );
 }
 
 export const creaseTopologyBuilder = {
-  build(viewport: Viewport, config: FoldedLatticeConfig): TopologyState {
+  build(viewport: Viewport, config: FoldedLatticeConfig): TopologyBuildResult {
     const settings = config.modules.get(creaseConfigKey) ?? fallbackCrease;
     const seed = config.topology.randomSeed;
     const field = generateCreaseField(viewport, settings, settings.life, seed);
@@ -804,8 +842,8 @@ export function rebuildTopologyPreservingMotion(
   state: SimulationState,
   config: FoldedLatticeConfig,
 ): void {
-  const field = state.topology.creaseField;
-  if (!field) return;
+  const runtime = getCreaseRuntime(state);
+  const field = runtime.creaseField;
   const old = state.topology;
   const scatterSeed =
     config.topology.randomSeed + 7717 + field.nextCreaseId * 977;
@@ -815,17 +853,19 @@ export function rebuildTopologyPreservingMotion(
   // polylines; rails of healed folds are simply not offered, which is
   // the garbage collection.
   const carryPoints = old.nodes
-    .filter((node) => !node.creaseTag && !node.pinned)
+    .filter((node, index) => !runtime.nodeTags[index] && !node.pinned)
     .map((node) => ({ x: node.restPosition.x, y: node.restPosition.y }));
-  const next = buildTopologyFromCreaseField(
+  const nextResult = buildTopologyFromCreaseField(
     state.viewport,
     config,
     field,
     scatterSeed,
     carryPoints,
   );
+  const next = nextResult.topology;
   if (next.nodes.length === 0 || old.triangles.length === 0) {
     state.topology = next;
+    nextResult.initializeResources?.(state.resources);
     return;
   }
 
@@ -920,4 +960,5 @@ export function rebuildTopologyPreservingMotion(
   // from positions on the next tick; rest lengths were built from the
   // field. Swap the skeleton under the unchanged sheet.
   state.topology = next;
+  nextResult.initializeResources?.(state.resources);
 }

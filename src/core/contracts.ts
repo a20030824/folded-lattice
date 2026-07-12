@@ -1,10 +1,16 @@
 import type { FoldedLatticeConfig } from "./config";
+import type { ResourceStore } from "./resources";
 import type { SimulationState, TopologyState } from "./state";
 import type { Viewport } from "./types";
 import type { PropertyBinding } from "../wallpaper/properties";
 
+export interface TopologyBuildResult {
+  topology: TopologyState;
+  initializeResources?(resources: ResourceStore): void;
+}
+
 export interface TopologyBuilder {
-  build(viewport: Viewport, config: FoldedLatticeConfig): TopologyState;
+  build(viewport: Viewport, config: FoldedLatticeConfig): TopologyBuildResult;
 }
 
 export interface SimulationSystem {

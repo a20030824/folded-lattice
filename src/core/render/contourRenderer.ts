@@ -2,6 +2,7 @@ import {
   contourConfigKey,
   type ContourConfig,
 } from "../../features/tideArchive/config";
+import { creaseRuntimeKey } from "../../features/crease/state";
 import type { Renderer } from "../contracts";
 import { clamp, hash01, mixRgb, parseColor, rgbString } from "../math";
 import type { NodeState, SimulationState, TopologyState } from "../state";
@@ -121,11 +122,14 @@ function buildPaperTile(
   return tile;
 }
 
-function createBuffers(topology: TopologyState): ContourBuffers {
+function createBuffers(
+  topology: TopologyState,
+  creaseEdges: { edgeIndex: number }[],
+): ContourBuffers {
   const segmentCapacity = topology.triangles.length;
   const chainCapacity = segmentCapacity + 2;
   const hardEdges = new Uint8Array(topology.edges.length);
-  for (const crease of topology.creaseEdges) {
+  for (const crease of creaseEdges) {
     if (crease.edgeIndex >= 0 && crease.edgeIndex < hardEdges.length) {
       hardEdges[crease.edgeIndex] = 1;
     }
@@ -628,8 +632,10 @@ export function createContourRenderer(canvas: HTMLCanvasElement): Renderer {
     render(state, config) {
       const settings = config.modules.get(contourConfigKey);
       if (!settings || state.topology.triangles.length === 0) return;
+      const runtime = state.resources.get(creaseRuntimeKey);
+      if (!runtime) return;
       if (!buffers || buffers.topology !== state.topology) {
-        buffers = createBuffers(state.topology);
+        buffers = createBuffers(state.topology, runtime.creaseEdges);
         clearArchive();
       }
 

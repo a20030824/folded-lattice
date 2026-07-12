@@ -1,7 +1,9 @@
 import type { SimulationSystem } from "../contracts";
 import { clamp, createRandom } from "../math";
 import { creaseConfigKey } from "../../features/crease/config";
-import type { CreaseFieldState, CreaseState, SimulationState } from "../state";
+import { getCreaseRuntime } from "../../features/crease/state";
+import type { CreaseFieldState, CreaseState } from "../../features/crease/state";
+import type { SimulationState } from "../state";
 import {
   buildCreaseState,
   evaluateCreaseField,
@@ -59,7 +61,7 @@ function spawnFold(
   scratch: LifeScratch,
   spec: FoldSpec,
 ): void {
-  const field = state.topology.creaseField!;
+  const field = getCreaseRuntime(state).creaseField;
   const random = scratch.random;
   const shortSide = field.shortSide;
   const overscan = shortSide * 0.16;
@@ -165,7 +167,7 @@ function calmestPoint(
   state: SimulationState,
   scratch: LifeScratch,
 ): { x: number; y: number } {
-  const field = state.topology.creaseField!;
+  const field = getCreaseRuntime(state).creaseField;
   let bestX = state.viewport.width * 0.5;
   let bestY = state.viewport.height * 0.5;
   let bestDistance = -1;
@@ -197,7 +199,7 @@ function calmestPoint(
 export const creaseLifeSystem: SimulationSystem = {
   name: "crease-life",
   update(state, config, deltaSeconds) {
-    const field = state.topology.creaseField;
+    const field = getCreaseRuntime(state).creaseField;
     const settings = config.modules.get(creaseConfigKey);
     const life = settings?.life;
     if (!field || !settings || !life?.enabled) return;

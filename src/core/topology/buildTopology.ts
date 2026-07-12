@@ -1,10 +1,10 @@
 import Delaunator from "delaunator";
 
+import type { TopologyBuildResult } from "../contracts";
 import type { FoldedLatticeConfig } from "../config";
 import type {
   EdgeState,
   NodeState,
-  TopologyState,
   TriangleState,
 } from "../state";
 import type { Viewport } from "../types";
@@ -138,13 +138,13 @@ function distance(a: NodeState, b: NodeState): number {
 }
 
 export const delaunayTopologyBuilder = {
-  build(viewport: Viewport, config: FoldedLatticeConfig): TopologyState {
+  build(viewport: Viewport, config: FoldedLatticeConfig): TopologyBuildResult {
     const points = [
       ...generatePoints(viewport, config),
       ...buildOverscanRing(viewport, config.topology.overscanRatio ?? 0),
     ];
     if (points.length < 3) {
-      return { nodes: [], edges: [], triangles: [], creaseEdges: [] };
+      return { topology: { nodes: [], edges: [], triangles: [] } };
     }
 
     const delaunay = Delaunator.from(points, (point) => point.x, (point) => point.y);
@@ -261,6 +261,6 @@ export const delaunayTopologyBuilder = {
       triangles[second]!.neighborIndices.push(first);
     }
 
-    return { nodes, edges, triangles, creaseEdges: [] };
+    return { topology: { nodes, edges, triangles } };
   },
 };
