@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "npx --yes vite-node tests/creaseTopology.characterization.ts",
+    "test": "vitest",
+    "test:run": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
   "devDependencies": {
     "@types/delaunator": "^5.0.3",
     "typescript": "^7.0.2",
-    "vite": "^8.1.4"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   }
 }
