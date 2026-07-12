@@ -1,4 +1,7 @@
-import type { ContourConfig } from "../config";
+import {
+  contourConfigKey,
+  type ContourConfig,
+} from "../../features/tideArchive/config";
 import type { Renderer } from "../contracts";
 import { clamp, hash01, mixRgb, parseColor, rgbString } from "../math";
 import type { NodeState, SimulationState, TopologyState } from "../state";
@@ -623,7 +626,7 @@ export function createContourRenderer(canvas: HTMLCanvasElement): Renderer {
     },
 
     render(state, config) {
-      const settings = config.contour;
+      const settings = config.modules.get(contourConfigKey);
       if (!settings || state.topology.triangles.length === 0) return;
       if (!buffers || buffers.topology !== state.topology) {
         buffers = createBuffers(state.topology);

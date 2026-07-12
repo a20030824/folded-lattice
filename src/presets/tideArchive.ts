@@ -1,5 +1,9 @@
 import type { FoldedLatticeConfig } from "../core/config";
 import { ModuleConfigStore } from "../core/moduleConfig";
+import {
+  contourConfigKey,
+  type ContourConfig,
+} from "../features/tideArchive/config";
 import type {
   PresetDefinition,
   PresetRendererResult,
@@ -23,7 +27,7 @@ import {
 import type { PropertyBinding } from "../wallpaper/properties";
 
 function createConfig(): FoldedLatticeConfig {
-  return {
+  const config: FoldedLatticeConfig = {
   topology: {
     nodeCount: 320,
     minimumDistanceRatio: 0.045,
@@ -137,7 +141,9 @@ function createConfig(): FoldedLatticeConfig {
     shadowTint: "#000000",
     curliness: 0.02,
   },
-  contour: {
+  };
+
+  const contourConfig: ContourConfig = {
     cycleSeconds: 30,
     echoCount: 12,
     echoDelaySeconds: 1.25,
@@ -158,8 +164,9 @@ function createConfig(): FoldedLatticeConfig {
     legacyOpacity: 0.28,
     legacyWidth: 0.94,
     legacySpatialGrid: 3,
-  },
   };
+  config.modules.set(contourConfigKey, contourConfig);
+  return config;
 }
 
 function createPropertyBindings(
