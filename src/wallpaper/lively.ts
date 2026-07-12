@@ -45,9 +45,6 @@ export function installLivelyBridge(
 
   window.livelyPropertyListener = (name, value) => {
     switch (name) {
-      case "backgroundColor":
-        if (typeof value === "string") config.render.colors.background = value;
-        break;
       case "edgeBrightness":
         config.render.edgeOpacity =
           defaults.edgeOpacity * (asNumber(value, 55) / 55);
