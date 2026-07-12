@@ -1,5 +1,6 @@
 ﻿import type { SimulationSystem } from "../contracts";
 import { clamp, valueNoise2D } from "../math";
+import { creatureConfigKey } from "../../features/wanderingInk/config";
 import { getInkRuntime } from "../../features/wanderingInk/state";
 import type { CreatureState } from "../../features/wanderingInk/types";
 import type { SimulationState } from "../state";
@@ -73,7 +74,7 @@ function createCreature(state: SimulationState, seed: number): CreatureState {
 export const wandererSystem: SimulationSystem = {
   name: "wanderer",
   update(state, config, deltaSeconds) {
-    const settings = config.creature;
+    const settings = config.modules.get(creatureConfigKey);
     if (!settings?.enabled) return;
 
     const runtime = getInkRuntime(state);

@@ -1,5 +1,6 @@
 import type { SimulationSystem } from "../contracts";
 import { clamp } from "../math";
+import { creatureConfigKey } from "../../features/wanderingInk/config";
 import { getInkRuntime } from "../../features/wanderingInk/state";
 import type { SimulationState } from "../state";
 
@@ -39,7 +40,7 @@ function ensureInk(state: SimulationState): Float32Array {
 export const inkWickSystem: SimulationSystem = {
   name: "ink-wick",
   update(state, config, deltaSeconds) {
-    if (!config.creature?.enabled) return;
+    if (!config.modules.get(creatureConfigKey)?.enabled) return;
     const runtime = getInkRuntime(state);
     const ink = ensureInk(state);
     const { nodes, edges } = state.topology;

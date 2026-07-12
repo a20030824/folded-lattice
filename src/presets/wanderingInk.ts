@@ -3,6 +3,7 @@ import type {
   PresetDefinition,
   PresetRendererResult,
 } from "../core/contracts";
+import { ModuleConfigStore } from "../core/moduleConfig";
 import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { memorySystem } from "../core/memory/updateMemory";
 import { createInkRenderer } from "../core/render/inkRenderer";
@@ -20,9 +21,13 @@ import {
   createTargetFpsBinding,
 } from "../wallpaper/properties";
 import type { PropertyBinding } from "../wallpaper/properties";
+import {
+  creatureConfigKey,
+  type CreatureConfig,
+} from "../features/wanderingInk/config";
 
 function createConfig(): FoldedLatticeConfig {
-  return {
+  const config: FoldedLatticeConfig = {
   topology: {
     // Dense weave (judge's call, twice now): fine facets so the
     // relief reads as paper grain, not a coarse crystal cloud.
@@ -129,7 +134,10 @@ function createConfig(): FoldedLatticeConfig {
     maximumSubSteps: 3,
     maximumDevicePixelRatio: 2,
   },
-  creature: {
+  modules: new ModuleConfigStore(),
+  };
+
+  const creatureConfig: CreatureConfig = {
     enabled: true,
     trailCount: 150,
     segmentSpacingRatio: 0.006,
@@ -143,8 +151,9 @@ function createConfig(): FoldedLatticeConfig {
     carveStrength: 46,
     carveRadiusRatio: 0.065,
     inkWidthRatio: 0.005,
-  },
   };
+  config.modules.set(creatureConfigKey, creatureConfig);
+  return config;
 }
 
 function createPropertyBindings(
@@ -193,7 +202,7 @@ function createRenderer(
 }
 
 function applyMode(config: FoldedLatticeConfig, mode: string | null): void {
-  const creature = config.creature;
+  const creature = config.modules.get(creatureConfigKey);
   if (!creature) return;
 
   if (mode === "serpent") {

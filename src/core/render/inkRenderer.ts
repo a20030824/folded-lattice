@@ -3,6 +3,7 @@ import { clamp, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
 import type { Rgb } from "../math";
 import type { Viewport } from "../types";
 import { getInkRuntime } from "../../features/wanderingInk/state";
+import { creatureConfigKey } from "../../features/wanderingInk/config";
 
 /**
  * The relief is rasterized small and blurred up: facets melt into one
@@ -406,7 +407,7 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       context.globalAlpha = 1;
       // The creature: one continuous brush stroke, tail melting into
       // the paper, width recorded from its pace when each point was laid.
-      const creatureConfig = config.creature;
+      const creatureConfig = config.modules.get(creatureConfigKey);
       if (creature && creatureConfig && creature.points.length > 1) {
         const shortSide = Math.max(
           1,

@@ -1,4 +1,5 @@
 import type { FoldedLatticeConfig } from "../core/config";
+import { ModuleConfigStore } from "../core/moduleConfig";
 import type {
   PresetDefinition,
   PresetRendererResult,
@@ -116,6 +117,7 @@ function createConfig(): FoldedLatticeConfig {
     maximumSubSteps: 3,
     maximumDevicePixelRatio: 2,
   },
+  modules: new ModuleConfigStore(),
   crease: {
     majorCount: 4,
     minorCount: 7,

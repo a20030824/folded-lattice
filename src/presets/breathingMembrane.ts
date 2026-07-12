@@ -1,4 +1,5 @@
 import type { FoldedLatticeConfig } from "../core/config";
+import { ModuleConfigStore } from "../core/moduleConfig";
 import type {
   PresetDefinition,
   PresetRendererResult,
@@ -135,6 +136,7 @@ function createConfig(): FoldedLatticeConfig {
     maximumSubSteps: 3,
     maximumDevicePixelRatio: 2,
   },
+  modules: new ModuleConfigStore(),
   pulse: {
     enabled: true,
     intervalSeconds: 3,
