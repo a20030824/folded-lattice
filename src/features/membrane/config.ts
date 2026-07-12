@@ -48,3 +48,19 @@ export interface PulseConfig {
 export const pulseConfigKey = createModuleConfigKey<PulseConfig>(
   "breathing-membrane-pulse",
 );
+
+/** Pointer gestures excite travelling waves in a taut membrane. */
+export interface MembraneWaveConfig {
+  enabled: boolean;
+  impactRadiusRatio: number;
+  impactStrength: number;
+  impactSeconds: number;
+  dragSpacingRatio: number;
+  dragStrength: number;
+  dragSeconds: number;
+}
+
+export const membraneWaveConfigKey =
+  createModuleConfigKey<MembraneWaveConfig>(
+    "breathing-membrane-wave",
+  );

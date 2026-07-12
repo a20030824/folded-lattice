@@ -290,17 +290,6 @@ export interface ContourConfig {
   legacySpatialGrid: number;
 }
 
-/** Pointer gestures excite travelling waves in a taut membrane. */
-export interface MembraneWaveConfig {
-  enabled: boolean;
-  impactRadiusRatio: number;
-  impactStrength: number;
-  impactSeconds: number;
-  dragSpacingRatio: number;
-  dragStrength: number;
-  dragSeconds: number;
-}
-
 /**
  * A slow second memory layer for triangles, independent of memoryBias.
  * It deposits from live pulse activity, diffuses to neighboring
@@ -330,6 +319,5 @@ export interface FoldedLatticeConfig {
   modules: ModuleConfigStore;
   crease?: CreaseConfig;
   contour?: ContourConfig;
-  membraneWave?: MembraneWaveConfig;
   legacy?: LegacyMemoryConfig;
 }

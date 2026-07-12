@@ -1,7 +1,9 @@
 import type { FoldedLatticeConfig } from "../core/config";
 import { ModuleConfigStore } from "../core/moduleConfig";
 import {
+  membraneWaveConfigKey,
   pulseConfigKey,
+  type MembraneWaveConfig,
   type PulseConfig,
 } from "../features/membrane/config";
 import type {
@@ -141,15 +143,6 @@ function createConfig(): FoldedLatticeConfig {
     maximumDevicePixelRatio: 2,
   },
   modules: new ModuleConfigStore(),
-  membraneWave: {
-    enabled: true,
-    impactRadiusRatio: 0.038,
-    impactStrength: 4200,
-    impactSeconds: 0.14,
-    dragSpacingRatio: 0.025,
-    dragStrength: 1500,
-    dragSeconds: 0.09,
-  },
   legacy: {
     enabled: true,
     depositRate: 0.05,
@@ -158,6 +151,17 @@ function createConfig(): FoldedLatticeConfig {
     maximum: 0.3,
   },
   };
+
+  const membraneWaveConfig: MembraneWaveConfig = {
+    enabled: true,
+    impactRadiusRatio: 0.038,
+    impactStrength: 4200,
+    impactSeconds: 0.14,
+    dragSpacingRatio: 0.025,
+    dragStrength: 1500,
+    dragSeconds: 0.09,
+  };
+  config.modules.set(membraneWaveConfigKey, membraneWaveConfig);
 
   const pulseConfig: PulseConfig = {
     enabled: true,
