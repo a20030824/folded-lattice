@@ -15,7 +15,13 @@ npm run dev
 npm run typecheck
 npm run test:run
 npm run build
+
+# 安裝 Playwright Chromium 並執行 app entry runtime tests
+npx playwright install chromium
+npm run test:browser
 ```
+
+Vitest 覆蓋 core、topology、systems 與 feature runtime；Playwright 會透過 Vite 啟動真正的 `index.html` / app entry，驗證 RAF runtime、preset aliases、Lively preset switching、pointer input、resize rebuild，以及 Paper / Membrane 的 Canvas fallback。
 
 `npm run build` 會輸出可離線執行的 `dist/`，可直接載入 Lively Wallpaper。開發時維護 `public/LivelyProperties.json`；Lively 的平台事件由 `src/wallpaper/` 轉換成 preset 提供的 property bindings，核心引擎不依賴 Lively API。
 

@@ -72,6 +72,7 @@ function startPreset(name: string | null): void {
   // Debug handles for tuning sessions; harmless in production wallpapers.
   (window as unknown as { __engine: typeof engine }).__engine = engine;
   (window as unknown as { __config: typeof config }).__config = config;
+  (window as unknown as { __presetId: string }).__presetId = definition.id;
   if (!document.hidden) engine.start();
 }
 
