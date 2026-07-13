@@ -11,8 +11,8 @@ import type {
 import { ambientDriftSystem } from "../core/fields/ambientDriftField";
 import { mouseFieldSystem, pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
-import { createPaperRenderer } from "../core/render/paperRenderer";
-import { createWebglPaperRenderer } from "../core/render/webglPaperRenderer";
+import { createPaperRenderer } from "../features/crumpledPaper/paperRenderer";
+import { createWebglPaperRenderer } from "../features/crumpledPaper/webglPaperRenderer";
 import {
   createBooleanBinding,
   createQualityBinding,

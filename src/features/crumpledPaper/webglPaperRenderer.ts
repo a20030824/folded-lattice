@@ -1,13 +1,13 @@
-import type { Renderer } from "../contracts";
-import { clamp, parseColor } from "../math";
-import { creaseConfigKey } from "../../features/crease/config";
+import type { Renderer } from "../../core/contracts";
+import { clamp, parseColor } from "../../core/math";
+import { creaseConfigKey } from "../crease/config";
 import {
   creaseRuntimeKey,
   type CreaseRuntimeState,
   type CreaseState,
-} from "../../features/crease/state";
-import type { SimulationState, TopologyState } from "../state";
-import type { Viewport } from "../types";
+} from "../crease/state";
+import type { SimulationState, TopologyState } from "../../core/state";
+import type { Viewport } from "../../core/types";
 
 /**
  * Per-pixel paper renderer. The triangle mesh is only a skeleton: normals

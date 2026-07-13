@@ -70,7 +70,17 @@ Crumpled Paper ─┐
 Tide Archive ───┘
 ```
 
-Crease config、runtime、topology builder 與 lifecycle system 已移出 core；paper Canvas renderer、paper WebGL renderer 與 contour renderer 仍暫留在 `src/core/render/`，所以 core 尚未完全不依賴 Crease。
+Crease config、runtime、topology builder 與 lifecycle system 已移出 core；目前只剩 contour renderer 暫留在 `src/core/render/`，所以 core 尚未完全不依賴 Crease。
+
+Crumpled Paper 的專屬 renderer 位於：
+
+```text
+src/features/crumpledPaper/
+  paperRenderer.ts
+  webglPaperRenderer.ts
+```
+
+兩個 renderer 依賴共享的 core renderer contract、math、state、types，以及 Crease 的 config/runtime。WebGL fallback policy 仍由 Crumpled Paper preset 的 `createRenderer()` 負責；Canvas 與 WebGL Paper renderer 已不再位於 core。
 
 ### Preset
 
@@ -110,7 +120,7 @@ renderer 由 preset 的 `createRenderer()` 建立，並實作共享的 `Renderer
 
 需要 WebGL fallback 的 preset 在自己的 renderer factory 內替換 canvas 並回傳新的 canvas 與 renderer。app 只接收 `PresetRendererResult`，不保存任何作品專屬的渲染判斷。
 
-目前 `paperRenderer.ts`、`webglPaperRenderer.ts` 與 `contourRenderer.ts` 仍位於 core，並可讀取 Crease feature 的 config/resource；這些 renderer 邊界留待後續獨立輪次處理。
+目前只有 `contourRenderer.ts` 仍位於 core，並可讀取 Crease feature 的 config/resource；它的 Tide Archive 邊界留待後續獨立輪次處理。
 
 ### Property bindings
 

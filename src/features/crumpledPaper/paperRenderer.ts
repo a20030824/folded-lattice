@@ -1,12 +1,12 @@
 import {
   creaseConfigKey,
   type CreaseConfig,
-} from "../../features/crease/config";
-import { creaseRuntimeKey } from "../../features/crease/state";
-import type { Renderer } from "../contracts";
-import { clamp, hash01, mixRgb, parseColor, rgbString } from "../math";
-import type { NodeState } from "../state";
-import type { Viewport } from "../types";
+} from "../crease/config";
+import { creaseRuntimeKey } from "../crease/state";
+import type { Renderer } from "../../core/contracts";
+import { clamp, hash01, mixRgb, parseColor, rgbString } from "../../core/math";
+import type { NodeState } from "../../core/state";
+import type { Viewport } from "../../core/types";
 
 const SHADE_STEPS = 48;
 
