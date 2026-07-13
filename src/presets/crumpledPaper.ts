@@ -18,8 +18,8 @@ import {
   createQualityBinding,
   createScaledNumberBinding,
   createTargetFpsBinding,
-} from "../wallpaper/properties";
-import type { PropertyBinding } from "../wallpaper/properties";
+} from "../core/propertyBindings";
+import type { PropertyBinding } from "../core/propertyBindings";
 import { springSystem } from "../core/simulation/applySprings";
 import { creaseLifeSystem } from "../core/simulation/creaseLife";
 import { integrationSystem } from "../core/simulation/integrate";

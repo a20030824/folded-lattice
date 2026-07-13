@@ -1,8 +1,8 @@
-import { asNumber } from "./properties";
+import { asNumber } from "../core/propertyBindings";
 import type {
   PropertyBinding,
   PropertyBindingContext,
-} from "./properties";
+} from "../core/propertyBindings";
 
 declare global {
   interface Window {

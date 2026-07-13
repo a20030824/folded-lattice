@@ -19,8 +19,8 @@ import {
   createQualityBinding,
   createScaledNumberBinding,
   createTargetFpsBinding,
-} from "../wallpaper/properties";
-import type { PropertyBinding } from "../wallpaper/properties";
+} from "../core/propertyBindings";
+import type { PropertyBinding } from "../core/propertyBindings";
 import {
   creatureConfigKey,
   type CreatureConfig,

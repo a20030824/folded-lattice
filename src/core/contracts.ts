@@ -2,7 +2,7 @@ import type { FoldedLatticeConfig } from "./config";
 import type { ResourceStore } from "./resources";
 import type { SimulationState, TopologyState } from "./state";
 import type { Viewport } from "./types";
-import type { PropertyBinding } from "../wallpaper/properties";
+import type { PropertyBinding } from "./propertyBindings";
 
 export interface TopologyBuildResult {
   topology: TopologyState;

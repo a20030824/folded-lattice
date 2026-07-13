@@ -88,7 +88,7 @@ renderer 由 preset 的 `createRenderer()` 建立，並實作共享的 `Renderer
 
 ### Property bindings
 
-`src/wallpaper/properties.ts` 定義 property binding 與 binding context。每個 preset 的 `createPropertyBindings(config)` 決定平台設定如何改變該 preset 的共享或 feature config；例如 node count 可以要求 topology rebuild，quality 可以要求 renderer refresh。
+`src/core/propertyBindings.ts` 定義平台無關的 property binding 與 binding context。每個 preset 的 `createPropertyBindings(config)` 決定平台設定如何改變該 preset 的共享或 feature config；例如 node count 可以要求 topology rebuild，quality 可以要求 renderer refresh。
 
 `src/wallpaper/lively.ts` 只負責：讀取 Lively 事件、尋找 binding、執行 binding、管理 debounce，以及將 preset selection 交回 app。它不能直接操作 `creatureConfig`、`creaseConfig` 或其他 feature config。
 
