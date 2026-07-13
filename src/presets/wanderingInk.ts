@@ -202,8 +202,7 @@ function createRenderer(
 }
 
 function applyMode(config: FoldedLatticeConfig, mode: string | null): void {
-  const creature = config.modules.get(creatureConfigKey);
-  if (!creature) return;
+  const creature = config.modules.require(creatureConfigKey);
 
   if (mode === "serpent") {
     creature.trailCount = 340;

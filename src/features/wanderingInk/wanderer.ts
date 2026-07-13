@@ -74,8 +74,8 @@ function createCreature(state: SimulationState, seed: number): CreatureState {
 export const wandererSystem: SimulationSystem = {
   name: "wanderer",
   update(state, config, deltaSeconds) {
-    const settings = config.modules.get(creatureConfigKey);
-    if (!settings?.enabled) return;
+    const settings = config.modules.require(creatureConfigKey);
+    if (!settings.enabled) return;
 
     const runtime = getInkRuntime(state);
     let creature = runtime.creature;

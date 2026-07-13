@@ -284,7 +284,28 @@ describe("import boundaries", () => {
     );
 
     expect(source).toContain("creatureConfigKey");
+    expect(source).toMatch(/modules\.get\(\s*creatureConfigKey\s*\)/);
+    expect(source).not.toMatch(/modules\.require\(\s*creatureConfigKey\s*\)/);
     expect(source).toMatch(/const\s+inkColor\s*=\s*creatureConfig\?\.color/);
     expect(source).toContain('"#34425c"');
+  });
+
+  it("requires Wandering Ink config in feature systems", () => {
+    for (const fileName of ["wanderer.ts", "inkWick.ts"]) {
+      const source = readFileSync(
+        join(
+          process.cwd(),
+          "src",
+          "features",
+          "wanderingInk",
+          fileName,
+        ),
+        "utf8",
+      );
+
+      expect(source).toMatch(
+        /modules\.require\(\s*creatureConfigKey\s*\)/,
+      );
+    }
   });
 });

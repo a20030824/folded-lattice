@@ -80,6 +80,8 @@ Membrane pulse color 是 simulation feature 的設定，位於 `PulseConfig.colo
 
 Wandering Ink 的 color 位於 `CreatureConfig.color`，不再放入共享 `ColorConfig`。Ink renderer 透過 `creatureConfigKey` 的 optional `.get()` 讀取設定，並把 `inkColor` 納入 palette cache key；缺少 CreatureConfig 時使用 renderer-local fallback `#34425c`，同時不繪製 creature body。
 
+Wandering Ink 的 `wandererSystem`、`inkWickSystem` 與 preset `applyMode()` 都以 `config.modules.require(creatureConfigKey)` 取得必要的 `CreatureConfig`；缺失時拋出 `Module config "wandering-ink-creature" is not available.`。`enabled=false` 讓兩個 system no-op，unknown mode 也不修改設定。Ink renderer 是例外，保留 optional `.get()` 以維持 palette fallback 與缺少 creature body 時的 graceful behavior。
+
 Crease 是 Crumpled Paper 與 Tide Archive 共用的 feature，目錄目前包含：
 
 ```text

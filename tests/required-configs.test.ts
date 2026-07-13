@@ -5,7 +5,10 @@ import { creaseConfigKey } from "../src/features/crease/config";
 import { creaseLifeSystem } from "../src/features/crease/creaseLife";
 import { creaseTopologyBuilder } from "../src/features/crease/creaseTopology";
 import { pulseConfigKey } from "../src/features/membrane/config";
+import { inkWickSystem } from "../src/features/wanderingInk/inkWick";
 import { creatureConfigKey } from "../src/features/wanderingInk/config";
+import { inkRuntimeKey } from "../src/features/wanderingInk/state";
+import { wandererSystem } from "../src/features/wanderingInk/wanderer";
 import { breathingMembranePreset } from "../src/presets/breathingMembrane";
 import { crumpledPaperPreset } from "../src/presets/crumpledPaper";
 import { tideArchivePreset } from "../src/presets/tideArchive";
@@ -28,6 +31,58 @@ describe("required module configurations", () => {
 
     expect(pulse.color).toBe("#f0ddb4");
     expect(config.render.colors).not.toHaveProperty("pulse");
+  });
+
+  it("fails fast when the wanderer config is missing", () => {
+    const config = wanderingInkPreset.createConfig();
+    const state = createEmptySimulationState(viewport);
+    config.modules = new ModuleConfigStore();
+
+    expect(() => {
+      wandererSystem.update(state, config, 1 / 60);
+    }).toThrow('Module config "wandering-ink-creature" is not available.');
+  });
+
+  it("fails fast when the ink wick config is missing", () => {
+    const config = wanderingInkPreset.createConfig();
+    const state = createEmptySimulationState(viewport);
+    config.modules = new ModuleConfigStore();
+
+    expect(() => {
+      inkWickSystem.update(state, config, 1 / 60);
+    }).toThrow('Module config "wandering-ink-creature" is not available.');
+  });
+
+  it("fails fast when Wandering Ink mode config is missing", () => {
+    const config = wanderingInkPreset.createConfig();
+    config.modules = new ModuleConfigStore();
+
+    expect(() => {
+      wanderingInkPreset.applyMode?.(config, "serpent");
+    }).toThrow('Module config "wandering-ink-creature" is not available.');
+  });
+
+  it("allows Wandering Ink systems to be disabled", () => {
+    const config = wanderingInkPreset.createConfig();
+    const settings = config.modules.require(creatureConfigKey);
+    config.modules.set(creatureConfigKey, { ...settings, enabled: false });
+    const state = createEmptySimulationState(viewport);
+
+    expect(() => {
+      wandererSystem.update(state, config, 1 / 60);
+      inkWickSystem.update(state, config, 1 / 60);
+    }).not.toThrow();
+    expect(state.resources.get(inkRuntimeKey)).toBeUndefined();
+  });
+
+  it("allows unknown Wandering Ink modes to be ignored", () => {
+    const config = wanderingInkPreset.createConfig();
+    const before = { ...config.modules.require(creatureConfigKey) };
+
+    expect(() => {
+      wanderingInkPreset.applyMode?.(config, "unknown-mode");
+    }).not.toThrow();
+    expect(config.modules.require(creatureConfigKey)).toEqual(before);
   });
 
   it("registers crease config for every crease preset", () => {
