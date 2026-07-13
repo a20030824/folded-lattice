@@ -238,7 +238,6 @@ export const delaunayTopologyBuilder = {
         visibility: 0,
         phase: id * 0.61803398875,
         neighborIndices: [],
-        legacy: 0,
       });
 
       a.triangleIndices.push(id);

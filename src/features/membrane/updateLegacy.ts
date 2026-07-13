@@ -1,6 +1,9 @@
 import type { SimulationSystem } from "../../core/contracts";
 import { legacyMemoryConfigKey } from "./config";
-import { requireMembranePulseRuntime } from "./state";
+import {
+  requireMembraneLegacyRuntime,
+  requireMembranePulseRuntime,
+} from "./state";
 
 /**
  * A second, much slower memory layer. Where memoryBias tracks the
@@ -24,31 +27,38 @@ export const legacyMemorySystem: SimulationSystem = {
       );
     }
     const { edgePulse } = pulseRuntime;
+    const { triangleLegacy, diffusionScratch } =
+      requireMembraneLegacyRuntime(state);
+    if (
+      triangleLegacy.length !== triangles.length ||
+      diffusionScratch.length !== triangles.length
+    ) {
+      throw new Error(
+        "Membrane legacy runtime size does not match the active topology.",
+      );
+    }
     const decay = Math.exp(-deltaSeconds / Math.max(1, settings.decaySeconds));
     const diffusion = Math.min(1, settings.diffusionRate * deltaSeconds);
 
-    for (const triangle of triangles) {
+    for (let index = 0; index < triangles.length; index += 1) {
+      const triangle = triangles[index]!;
       const pulse =
         ((edgePulse[triangle.edgeA] ?? 0) +
           (edgePulse[triangle.edgeB] ?? 0) +
           (edgePulse[triangle.edgeC] ?? 0)) /
         3;
 
-      triangle.legacy = Math.min(
+      const current = triangleLegacy[index] ?? 0;
+      triangleLegacy[index] = Math.min(
         settings.maximum,
-        triangle.legacy + pulse * settings.depositRate * deltaSeconds,
+        current + pulse * settings.depositRate * deltaSeconds,
       );
     }
 
     // Diffuse toward the neighbor mean using the pre-diffusion values,
     // so the spread this step is symmetric rather than order-biased.
-    if (!state.legacyScratch || state.legacyScratch.length !== triangles.length) {
-      state.legacyScratch = new Float32Array(triangles.length);
-    }
-    const before = state.legacyScratch;
-    for (let index = 0; index < triangles.length; index += 1) {
-      before[index] = triangles[index]!.legacy;
-    }
+    const before = diffusionScratch;
+    before.set(triangleLegacy);
 
     for (let index = 0; index < triangles.length; index += 1) {
       const triangle = triangles[index]!;
@@ -61,7 +71,7 @@ export const legacyMemorySystem: SimulationSystem = {
       }
       const neighborMean = total / neighbors.length;
 
-      triangle.legacy =
+      triangleLegacy[index] =
         (before[index]! + (neighborMean - before[index]!) * diffusion) * decay;
     }
   },

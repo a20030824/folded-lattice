@@ -1,7 +1,9 @@
 import type { TopologyBuilder } from "../../core/contracts";
 import { delaunayTopologyBuilder } from "../../core/topology/buildTopology";
 import {
+  createMembraneLegacyRuntime,
   createMembranePulseRuntime,
+  membraneLegacyRuntimeKey,
   membranePulseRuntimeKey,
 } from "./state";
 
@@ -17,6 +19,10 @@ export const membraneTopologyBuilder: TopologyBuilder = {
         resources.set(
           membranePulseRuntimeKey,
           createMembranePulseRuntime(result.topology),
+        );
+        resources.set(
+          membraneLegacyRuntimeKey,
+          createMembraneLegacyRuntime(result.topology),
         );
       },
     };

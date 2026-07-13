@@ -225,4 +225,14 @@ describe("import boundaries", () => {
 
     expect(coreStateSource).not.toMatch(/\bpulse\s*:\s*number\b/);
   });
+
+  it("keeps membrane legacy state out of core", () => {
+    const coreStateSource = readFileSync(
+      join(process.cwd(), "src", "core", "state.ts"),
+      "utf8",
+    );
+
+    expect(coreStateSource).not.toMatch(/\blegacy\s*:\s*number\b/);
+    expect(coreStateSource).not.toContain("legacyScratch");
+  });
 });

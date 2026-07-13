@@ -2,6 +2,7 @@ import type { Renderer } from "../../core/contracts";
 import { clamp, parseColor } from "../../core/math";
 import type { SimulationState, TopologyState } from "../../core/state";
 import type { Viewport } from "../../core/types";
+import { getMembraneLegacyRuntime } from "./state";
 import vertexShaderSource
   from "./shaders/membrane.vert.glsl?raw";
 
@@ -148,6 +149,11 @@ function updateMesh(
   depthProjection: number,
 ): void {
   const { nodes, edges, triangles } = state.topology;
+  const legacyRuntime = getMembraneLegacyRuntime(state);
+  const triangleLegacy =
+    legacyRuntime?.triangleLegacy.length === triangles.length
+      ? legacyRuntime.triangleLegacy
+      : undefined;
   const {
     nodeNormals,
     nodePresence,
@@ -167,7 +173,9 @@ function updateMesh(
   nodeCurvature.fill(0);
   nodeLegacy.fill(0);
 
-  for (const triangle of triangles) {
+  for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex += 1) {
+    const triangle = triangles[triangleIndex]!;
+    const legacyValue = triangleLegacy?.[triangleIndex] ?? 0;
     const flip = triangle.normal.z < 0 ? -1 : 1;
     const normalX = triangle.normal.x * flip;
     const normalY = triangle.normal.y * flip;
@@ -193,7 +201,7 @@ function updateMesh(
         (nodeCurvature[nodeIndex] ?? 0) + fold;
 
       nodeLegacy[nodeIndex] =
-        (nodeLegacy[nodeIndex] ?? 0) + triangle.legacy;
+        (nodeLegacy[nodeIndex] ?? 0) + legacyValue;
     }
   }
 
