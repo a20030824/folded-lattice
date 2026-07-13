@@ -6,6 +6,7 @@ import type { Viewport } from "../core/types";
 import { resolvePreset } from "../presets/registry";
 import { installLivelyBridge } from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
+import { createRendererWithWebglCleanup } from "../wallpaper/webglInitialization";
 
 let canvas = document.querySelector<HTMLCanvasElement>("#wallpaper");
 if (!canvas) throw new Error('Canvas element "#wallpaper" was not found.');
@@ -46,7 +47,10 @@ function startPreset(name: string | null): void {
   const config = definition.createConfig();
   definition.applyMode?.(config, urlParameters.get("mode"));
 
-  const rendererResult = definition.createRenderer(canvas!, config);
+  const rendererCanvas = canvas!;
+  const rendererResult = createRendererWithWebglCleanup(rendererCanvas, () =>
+    definition.createRenderer(rendererCanvas, config),
+  );
   canvas = rendererResult.canvas;
 
   const engine = createEngine(
