@@ -59,7 +59,7 @@ function startPreset(name: string | null): void {
   const propertyBindings = definition.createPropertyBindings(config);
   const removeLivelyBridge = installLivelyBridge(propertyBindings, {
     rebuildTopology: engine.rebuildTopology,
-    refreshRenderer: () => engine.resize(getViewport()),
+    refreshRenderer: engine.refreshRenderer,
     selectPreset: startPreset,
   });
 
