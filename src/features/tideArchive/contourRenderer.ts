@@ -1,12 +1,12 @@
 import {
   contourConfigKey,
   type ContourConfig,
-} from "../../features/tideArchive/config";
-import { creaseRuntimeKey } from "../../features/crease/state";
-import type { Renderer } from "../contracts";
-import { clamp, hash01, mixRgb, parseColor, rgbString } from "../math";
-import type { NodeState, SimulationState, TopologyState } from "../state";
-import type { Viewport } from "../types";
+} from "./config";
+import { creaseRuntimeKey } from "../crease/state";
+import type { Renderer } from "../../core/contracts";
+import { clamp, hash01, mixRgb, parseColor, rgbString } from "../../core/math";
+import type { NodeState, SimulationState, TopologyState } from "../../core/state";
+import type { Viewport } from "../../core/types";
 
 interface ContourPalette {
   key: string;

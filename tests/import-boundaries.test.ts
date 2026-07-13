@@ -22,6 +22,18 @@ function collectTypeScriptFiles(directory: string): string[] {
   return files;
 }
 
+function extractModuleSpecifiers(source: string): string[] {
+  const specifiers: string[] = [];
+  const pattern = /(?:from\s*|import\s*\()\s*["']([^"']+)["']/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const specifier = match[1];
+    if (specifier) specifiers.push(specifier);
+  }
+
+  return specifiers;
+}
+
 function findViolationsInDirectories(
   directories: readonly string[],
   forbiddenFragments: readonly string[],
@@ -32,7 +44,11 @@ function findViolationsInDirectories(
     for (const path of collectTypeScriptFiles(directory)) {
       const source = readFileSync(path, "utf8");
 
-      if (forbiddenFragments.some((fragment) => source.includes(fragment))) {
+      if (
+        extractModuleSpecifiers(source).some((specifier) =>
+          forbiddenFragments.some((fragment) => specifier.includes(fragment)),
+        )
+      ) {
         violations.push(relative(process.cwd(), path).replaceAll("\\", "/"));
       }
     }
@@ -81,6 +97,18 @@ describe("import boundaries", () => {
     ).toEqual([]);
   });
 
+  it("prevents core from importing feature implementations", () => {
+    expect(
+      findViolationsInDirectories([coreDirectory], [
+        "/features/",
+        "../features",
+        "../../features",
+        "../../../features",
+        "../../../../features",
+      ]),
+    ).toEqual([]);
+  });
+
   it("keeps crease implementation out of core topology and simulation", () => {
     const coreTopologyDirectory = join(
       process.cwd(),
@@ -108,7 +136,7 @@ describe("import boundaries", () => {
     ).toEqual([]);
   });
 
-  it("limits core render's crease dependency to Tide Archive", () => {
+  it("prevents core render from importing crease features", () => {
     expect(
       findFilesUsingFragments(coreRenderDirectory, [
         "/features/crease/",
@@ -116,10 +144,11 @@ describe("import boundaries", () => {
         "../../features/crease",
         "../../../features/crease",
       ]),
-    ).toEqual(["src/core/render/contourRenderer.ts"]);
+    ).toEqual([]);
 
     expect(existsSync(join(coreRenderDirectory, "paperRenderer.ts"))).toBe(false);
     expect(existsSync(join(coreRenderDirectory, "webglPaperRenderer.ts"))).toBe(false);
+    expect(existsSync(join(coreRenderDirectory, "contourRenderer.ts"))).toBe(false);
     expect(
       existsSync(
         join(process.cwd(), "src", "features", "crumpledPaper", "paperRenderer.ts"),
@@ -133,6 +162,17 @@ describe("import boundaries", () => {
           "features",
           "crumpledPaper",
           "webglPaperRenderer.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(
+          process.cwd(),
+          "src",
+          "features",
+          "tideArchive",
+          "contourRenderer.ts",
         ),
       ),
     ).toBe(true);

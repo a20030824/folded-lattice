@@ -16,7 +16,7 @@ import { ambientDriftSystem } from "../core/fields/ambientDriftField";
 import { mouseFieldSystem, pointerSmoothingSystem } from "../core/fields/mouseField";
 import { pressureFieldSystem } from "../core/fields/pressureField";
 import { memorySystem } from "../core/memory/updateMemory";
-import { createContourRenderer } from "../core/render/contourRenderer";
+import { createContourRenderer } from "../features/tideArchive/contourRenderer";
 import { springSystem } from "../core/simulation/applySprings";
 import { integrationSystem } from "../core/simulation/integrate";
 import { resetForcesSystem } from "../core/simulation/resetForces";

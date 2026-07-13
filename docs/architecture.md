@@ -5,7 +5,12 @@ Folded Lattice 將「共享的晶格模擬」與「作品的個性」分開。`c
 ## 依賴方向
 
 ```text
-app → preset registry → preset/features → core
+app → preset registry → presets/features → core
+core 不得 import：
+- `features`
+- `wallpaper`
+- `presets`
+- `app`
 platform adapter → property bindings
 ```
 
@@ -70,7 +75,7 @@ Crumpled Paper ─┐
 Tide Archive ───┘
 ```
 
-Crease config、runtime、topology builder 與 lifecycle system 已移出 core；目前只剩 contour renderer 暫留在 `src/core/render/`，所以 core 尚未完全不依賴 Crease。
+Crease config、runtime、topology builder 與 lifecycle system 已移出 core；Paper 與 Tide Archive 的 renderer 也各自位於 feature 目錄，因此 core 已不再依賴 Crease feature。
 
 Crumpled Paper 的專屬 renderer 位於：
 
@@ -81,6 +86,16 @@ src/features/crumpledPaper/
 ```
 
 兩個 renderer 依賴共享的 core renderer contract、math、state、types，以及 Crease 的 config/runtime。WebGL fallback policy 仍由 Crumpled Paper preset 的 `createRenderer()` 負責；Canvas 與 WebGL Paper renderer 已不再位於 core。
+
+Tide Archive 的專屬 contour renderer 位於：
+
+```text
+src/features/tideArchive/
+  config.ts
+  contourRenderer.ts
+```
+
+Contour renderer 是 Tide Archive 專屬的 renderer，讀取 Tide Archive contour config 與共享的 Crease runtime，將不可見的 fold heights 轉成 contour。它只依賴 core 的 renderer contract、math、state 與 viewport types；renderer ownership 與 factory 仍由 Tide Archive preset 負責。
 
 ### Preset
 
@@ -120,7 +135,7 @@ renderer 由 preset 的 `createRenderer()` 建立，並實作共享的 `Renderer
 
 需要 WebGL fallback 的 preset 在自己的 renderer factory 內替換 canvas 並回傳新的 canvas 與 renderer。app 只接收 `PresetRendererResult`，不保存任何作品專屬的渲染判斷。
 
-目前只有 `contourRenderer.ts` 仍位於 core，並可讀取 Crease feature 的 config/resource；它的 Tide Archive 邊界留待後續獨立輪次處理。
+目前 `core/render` 不再讀取 Crease feature；Crumpled Paper 與 Tide Archive renderer 都位於各自的 feature 目錄。
 
 ### Property bindings
 
