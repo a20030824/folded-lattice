@@ -177,4 +177,43 @@ describe("import boundaries", () => {
       ),
     ).toBe(true);
   });
+
+  it("keeps membrane renderers and shaders out of core", () => {
+    const membraneDirectory = join(
+      process.cwd(),
+      "src",
+      "features",
+      "membrane",
+    );
+
+    expect(existsSync(join(coreRenderDirectory, "canvasRenderer.ts"))).toBe(false);
+    expect(
+      existsSync(join(coreRenderDirectory, "webglMembraneRenderer.ts")),
+    ).toBe(false);
+    expect(
+      existsSync(
+        join(coreRenderDirectory, "shaders", "membrane.vert.glsl"),
+      ),
+    ).toBe(false);
+    expect(
+      existsSync(
+        join(coreRenderDirectory, "shaders", "membrane.frag.glsl"),
+      ),
+    ).toBe(false);
+
+    expect(existsSync(join(membraneDirectory, "canvasRenderer.ts"))).toBe(true);
+    expect(
+      existsSync(join(membraneDirectory, "webglMembraneRenderer.ts")),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(membraneDirectory, "shaders", "membrane.vert.glsl"),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(membraneDirectory, "shaders", "membrane.frag.glsl"),
+      ),
+    ).toBe(true);
+  });
 });

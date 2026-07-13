@@ -57,7 +57,22 @@ Breathing Membrane 的 `EdgeState.pulse`、`TriangleState.legacy` 與 `Simulatio
 
 Wandering Ink 的 `config.ts`、`state.ts`、`types.ts`、`wanderer.ts`、`inkWick.ts` 與 `inkRenderer.ts` 現在都位於 `src/features/wanderingInk/`。其中前三者管理設定與 runtime 型別，後三者分別提供作品專屬的 simulation systems 與 renderer；它們只從 `core` 取用共享 contract、math、state、config 與 types。
 
-Breathing Membrane 的 feature config 與三個專屬 system：`membranePulse`、`membraneWave`、`legacyMemory`，現在都位於 `src/features/membrane/`。renderer 與上述共享資料 channel 尚未搬移，因此 Membrane 尚未完全與 core 分離。
+Breathing Membrane 的 feature config、三個專屬 system：`membranePulse`、`membraneWave`、`legacyMemory`，以及 Canvas/WebGL renderer 與 shader，現在都位於 `src/features/membrane/`：
+
+```text
+src/features/membrane/
+  config.ts
+  membranePulse.ts
+  membraneWave.ts
+  updateLegacy.ts
+  canvasRenderer.ts
+  webglMembraneRenderer.ts
+  shaders/
+    membrane.vert.glsl
+    membrane.frag.glsl
+```
+
+Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與 types；WebGL fallback policy 仍由 preset 負責。`EdgeState.pulse`、`TriangleState.legacy` 與 `SimulationState.legacyScratch` 仍保留於共享 state，因此 Membrane 的 runtime channel 尚未完全與 core 分離。
 
 Crease 是 Crumpled Paper 與 Tide Archive 共用的 feature，目錄目前包含：
 

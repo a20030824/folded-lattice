@@ -1,8 +1,8 @@
-import type { Renderer } from "../contracts";
-import { clamp, mixRgb, parseColor, rgbString } from "../math";
-import type { Rgb } from "../math";
-import type { NodeState } from "../state";
-import type { Viewport } from "../types";
+import type { Renderer } from "../../core/contracts";
+import { clamp, mixRgb, parseColor, rgbString } from "../../core/math";
+import type { Rgb } from "../../core/math";
+import type { NodeState } from "../../core/state";
+import type { Viewport } from "../../core/types";
 
 const TRIANGLE_LUT_STEPS = 24;
 const EDGE_LUT_STEPS = 16;

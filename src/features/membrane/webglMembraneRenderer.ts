@@ -1,7 +1,7 @@
-import type { Renderer } from "../contracts";
-import { clamp, parseColor } from "../math";
-import type { SimulationState, TopologyState } from "../state";
-import type { Viewport } from "../types";
+import type { Renderer } from "../../core/contracts";
+import { clamp, parseColor } from "../../core/math";
+import type { SimulationState, TopologyState } from "../../core/state";
+import type { Viewport } from "../../core/types";
 import vertexShaderSource
   from "./shaders/membrane.vert.glsl?raw";
 

@@ -12,8 +12,8 @@ import type {
   PresetDefinition,
   PresetRendererResult,
 } from "../core/contracts";
-import { createCanvasRenderer } from "../core/render/canvasRenderer";
-import { createWebglMembraneRenderer } from "../core/render/webglMembraneRenderer";
+import { createCanvasRenderer } from "../features/membrane/canvasRenderer";
+import { createWebglMembraneRenderer } from "../features/membrane/webglMembraneRenderer";
 import {
   createBooleanBinding,
   createQualityBinding,
