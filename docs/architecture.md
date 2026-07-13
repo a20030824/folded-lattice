@@ -47,7 +47,7 @@ platform adapter → property bindings
 
 這讓 topology rebuild 能以 `TopologyBuildResult.initializeResources` 初始化或替換相關 resource，而不必擴張共享 `SimulationState`。
 
-Breathing Membrane 的 `EdgeState.pulse`、`TriangleState.legacy` 與 `SimulationState.legacyScratch` 目前仍保留於共享 state；它們將在後續 runtime-state 階段再決定是否搬移。
+Breathing Membrane 的 pulse channel 已移出共享 `EdgeState`，改由 `MembranePulseRuntime.edgePulse` 存在 `ResourceStore`；`TriangleState.legacy` 與 `SimulationState.legacyScratch` 目前仍保留於共享 state，待後續 legacy channel 階段再決定是否搬移。
 
 ### System
 
@@ -62,6 +62,8 @@ Breathing Membrane 的 feature config、三個專屬 system：`membranePulse`、
 ```text
 src/features/membrane/
   config.ts
+  state.ts
+  topology.ts
   membranePulse.ts
   membraneWave.ts
   updateLegacy.ts
@@ -72,7 +74,7 @@ src/features/membrane/
     membrane.frag.glsl
 ```
 
-Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與 types；WebGL fallback policy 仍由 preset 負責。`EdgeState.pulse`、`TriangleState.legacy` 與 `SimulationState.legacyScratch` 仍保留於共享 state，因此 Membrane 的 runtime channel 尚未完全與 core 分離。
+Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與 types；WebGL fallback policy 仍由 preset 負責。Canvas renderer 透過 `membranePulseRuntimeKey` 讀取 pulse resource；`TriangleState.legacy` 與 `SimulationState.legacyScratch` 仍保留於共享 state，因此 Membrane 的 runtime channel 尚未完全與 core 分離。
 
 Crease 是 Crumpled Paper 與 Tide Archive 共用的 feature，目錄目前包含：
 
@@ -134,7 +136,7 @@ Contour renderer 是 Tide Archive 專屬的 renderer，讀取 Tide Archive conto
 
 ### ResourceStore
 
-`ResourceStore` 是 typed key/value 容器，負責 feature runtime 的生命週期邊界。feature 定義自己的 key 與 state factory，system 以 key 取得資源；core 不需要知道資源的具體型別或作品名稱。拓撲重建時，builder 可透過 `initializeResources` 建立與新 topology 對齊的 resource。
+`ResourceStore` 是 typed key/value 容器，負責 feature runtime 的生命週期邊界。feature 定義自己的 key 與 state factory，system 以 key 取得資源；core 不需要知道資源的具體型別或作品名稱。Membrane 以 `membranePulseRuntimeKey` 保存 `MembranePulseRuntime.edgePulse`，拓撲重建時由 builder 的 `initializeResources` 建立與新 topology 對齊的 resource。
 
 ### ModuleConfigStore
 
@@ -143,6 +145,8 @@ Contour renderer 是 Tide Archive 專屬的 renderer，讀取 Tide Archive conto
 ### TopologyBuilder
 
 `TopologyBuilder` 接收 viewport 與共享 config，回傳 `TopologyBuildResult`。結果包含通用 `TopologyState`，也可提供 `initializeResources` 來初始化 feature runtime。Delaunay 與 crease topology 都遵守同一個 contract；引擎不需要知道使用哪一種幾何。
+
+Breathing Membrane 的 `membraneTopologyBuilder` 包裝共享 Delaunay builder，在保留 base initializer 的同時初始化 pulse runtime；每次 topology rebuild 都替換 `edgePulse`，避免舊 mesh 的 pulse 索引殘留。
 
 ### Renderer ownership
 

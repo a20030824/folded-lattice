@@ -2,6 +2,7 @@ import type { SimulationSystem } from "../../core/contracts";
 import { createRandom } from "../../core/math";
 import { pulseConfigKey } from "./config";
 import type { EdgeState, NodeState, SimulationState } from "../../core/state";
+import { requireMembranePulseRuntime } from "./state";
 
 /**
  * How quickly the warm front cools once it has passed an edge; the
@@ -148,11 +149,19 @@ export const membranePulseSystem: SimulationSystem = {
     if (!settings?.enabled) return;
     const { nodes, edges } = state.topology;
     if (nodes.length === 0) return;
+    const pulseRuntime = requireMembranePulseRuntime(state);
+    if (pulseRuntime.topology !== state.topology) {
+      throw new Error(
+        "Membrane pulse runtime does not match the active topology.",
+      );
+    }
+    const edgePulse = pulseRuntime.edgePulse;
 
     const scratch = getScratch(state, config.topology.randomSeed);
     const cooling = Math.exp(-PULSE_COOLING_PER_SECOND * deltaSeconds);
-    for (const edge of edges) {
-      if (edge.pulse > 0.0005) edge.pulse *= cooling;
+    for (let index = 0; index < edges.length; index += 1) {
+      const pulse = edgePulse[index] ?? 0;
+      if (pulse > 0.0005) edgePulse[index] = pulse * cooling;
     }
 
     const pointerDown = state.pointer.isInside && state.pointer.isDown;
@@ -218,7 +227,9 @@ export const membranePulseSystem: SimulationSystem = {
       const visibleSignal = scratch.visualFront
         ? signal
         : 0;
-      if (visibleSignal > edge.pulse) edge.pulse = visibleSignal;
+      if (visibleSignal > (edgePulse[index] ?? 0)) {
+        edgePulse[index] = visibleSignal;
+      }
       edge.memory = Math.min(
         maximumMemory,
         edge.memory + settings.memoryDeposit * signal * deltaSeconds,

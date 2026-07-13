@@ -33,7 +33,7 @@ import { membraneWaveSystem } from "../features/membrane/membraneWave";
 import { integrationSystem } from "../core/simulation/integrate";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
-import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
+import { membraneTopologyBuilder } from "../features/membrane/topology";
 
 function createConfig(): FoldedLatticeConfig {
   const config: FoldedLatticeConfig = {
@@ -280,7 +280,7 @@ export const breathingMembranePreset: PresetDefinition = {
     "A quiet triangular membrane shaped by pressure, tension, and fading structural memory.",
   createConfig,
   createRenderer,
-  topologyBuilder: delaunayTopologyBuilder,
+  topologyBuilder: membraneTopologyBuilder,
   createPropertyBindings,
   simulationSystems: [
     resetForcesSystem,

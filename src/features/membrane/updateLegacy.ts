@@ -1,5 +1,6 @@
 import type { SimulationSystem } from "../../core/contracts";
 import { legacyMemoryConfigKey } from "./config";
+import { requireMembranePulseRuntime } from "./state";
 
 /**
  * A second, much slower memory layer. Where memoryBias tracks the
@@ -15,15 +16,22 @@ export const legacyMemorySystem: SimulationSystem = {
     const settings = config.modules.get(legacyMemoryConfigKey);
     if (!settings?.enabled) return;
 
-    const { edges, triangles } = state.topology;
+    const { triangles } = state.topology;
+    const pulseRuntime = requireMembranePulseRuntime(state);
+    if (pulseRuntime.topology !== state.topology) {
+      throw new Error(
+        "Membrane pulse runtime does not match the active topology.",
+      );
+    }
+    const { edgePulse } = pulseRuntime;
     const decay = Math.exp(-deltaSeconds / Math.max(1, settings.decaySeconds));
     const diffusion = Math.min(1, settings.diffusionRate * deltaSeconds);
 
     for (const triangle of triangles) {
       const pulse =
-        ((edges[triangle.edgeA]?.pulse ?? 0) +
-          (edges[triangle.edgeB]?.pulse ?? 0) +
-          (edges[triangle.edgeC]?.pulse ?? 0)) /
+        ((edgePulse[triangle.edgeA] ?? 0) +
+          (edgePulse[triangle.edgeB] ?? 0) +
+          (edgePulse[triangle.edgeC] ?? 0)) /
         3;
 
       triangle.legacy = Math.min(

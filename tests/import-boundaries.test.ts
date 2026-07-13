@@ -216,4 +216,13 @@ describe("import boundaries", () => {
       ),
     ).toBe(true);
   });
+
+  it("keeps membrane pulse state out of core edges", () => {
+    const coreStateSource = readFileSync(
+      join(process.cwd(), "src", "core", "state.ts"),
+      "utf8",
+    );
+
+    expect(coreStateSource).not.toMatch(/\bpulse\s*:\s*number\b/);
+  });
 });

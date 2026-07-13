@@ -3,6 +3,7 @@ import { clamp, mixRgb, parseColor, rgbString } from "../../core/math";
 import type { Rgb } from "../../core/math";
 import type { NodeState } from "../../core/state";
 import type { Viewport } from "../../core/types";
+import { getMembranePulseRuntime } from "./state";
 
 const TRIANGLE_LUT_STEPS = 24;
 const EDGE_LUT_STEPS = 16;
@@ -178,6 +179,11 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
 
     render(state, config) {
       const { nodes, edges, triangles } = state.topology;
+      const pulseRuntime = getMembranePulseRuntime(state);
+      const edgePulse =
+        pulseRuntime?.topology === state.topology
+          ? pulseRuntime.edgePulse
+          : undefined;
       const render = config.render;
       const atmosphere = render.atmosphere;
       const maximumDepth = Math.max(
@@ -342,7 +348,8 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
       if (palette.pulse) {
         context.strokeStyle = palette.pulse;
         for (const edge of edges) {
-          if (edge.pulse < 0.02) continue;
+          const pulse = edgePulse?.[edge.id] ?? 0;
+          if (pulse < 0.02) continue;
           const a = nodes[edge.nodeA];
           const b = nodes[edge.nodeB];
           if (!a || !b) continue;
@@ -352,14 +359,14 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
           const bx = projectedX(b, render.depthProjection);
           const by = projectedY(b, render.depthProjection);
 
-          context.globalAlpha = edge.pulse * 0.14;
+          context.globalAlpha = pulse * 0.14;
           context.lineWidth = render.edgeMaximumWidth * 4.2;
           context.beginPath();
           context.moveTo(ax, ay);
           context.lineTo(bx, by);
           context.stroke();
 
-          context.globalAlpha = edge.pulse * 0.8;
+          context.globalAlpha = pulse * 0.8;
           context.lineWidth = render.edgeMaximumWidth * 1.1;
           context.beginPath();
           context.moveTo(ax, ay);
