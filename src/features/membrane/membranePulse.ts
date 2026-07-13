@@ -1,7 +1,7 @@
-import type { SimulationSystem } from "../contracts";
-import { createRandom } from "../math";
-import { pulseConfigKey } from "../../features/membrane/config";
-import type { EdgeState, NodeState, SimulationState } from "../state";
+import type { SimulationSystem } from "../../core/contracts";
+import { createRandom } from "../../core/math";
+import { pulseConfigKey } from "./config";
+import type { EdgeState, NodeState, SimulationState } from "../../core/state";
 
 /**
  * How quickly the warm front cools once it has passed an edge; the

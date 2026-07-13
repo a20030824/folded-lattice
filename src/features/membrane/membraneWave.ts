@@ -1,5 +1,5 @@
-import type { SimulationSystem } from "../contracts";
-import { membraneWaveConfigKey } from "../../features/membrane/config";
+import type { SimulationSystem } from "../../core/contracts";
+import { membraneWaveConfigKey } from "./config";
 
 interface Disturbance {
   x: number;

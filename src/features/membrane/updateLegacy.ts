@@ -1,5 +1,5 @@
-import type { SimulationSystem } from "../contracts";
-import { legacyMemoryConfigKey } from "../../features/membrane/config";
+import type { SimulationSystem } from "../../core/contracts";
+import { legacyMemoryConfigKey } from "./config";
 
 /**
  * A second, much slower memory layer. Where memoryBias tracks the

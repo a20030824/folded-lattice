@@ -21,41 +21,52 @@ function collectTypeScriptFiles(directory: string): string[] {
   return files;
 }
 
+function findCoreViolations(
+  forbiddenFragments: readonly string[],
+): string[] {
+  const violations: string[] = [];
+
+  for (const path of collectTypeScriptFiles(coreDirectory)) {
+    const source = readFileSync(path, "utf8");
+
+    if (forbiddenFragments.some((fragment) => source.includes(fragment))) {
+      violations.push(relative(process.cwd(), path));
+    }
+  }
+
+  return violations;
+}
+
 describe("import boundaries", () => {
   it("prevents core from importing wallpaper adapters", () => {
-    const violations: string[] = [];
-
-    for (const path of collectTypeScriptFiles(coreDirectory)) {
-      const source = readFileSync(path, "utf8");
-
-      if (
-        source.includes("/wallpaper/") ||
-        source.includes("../wallpaper") ||
-        source.includes("../../wallpaper")
-      ) {
-        violations.push(relative(process.cwd(), path));
-      }
-    }
-
-    expect(violations).toEqual([]);
+    expect(
+      findCoreViolations([
+        "/wallpaper/",
+        "../wallpaper",
+        "../../wallpaper",
+      ]),
+    ).toEqual([]);
   });
 
   it("prevents core from importing Wandering Ink features", () => {
-    const violations: string[] = [];
+    expect(
+      findCoreViolations([
+        "/features/wanderingInk/",
+        "../features/wanderingInk",
+        "../../features/wanderingInk",
+        "../../../features/wanderingInk",
+      ]),
+    ).toEqual([]);
+  });
 
-    for (const path of collectTypeScriptFiles(coreDirectory)) {
-      const source = readFileSync(path, "utf8");
-
-      if (
-        source.includes("/features/wanderingInk/") ||
-        source.includes("../features/wanderingInk") ||
-        source.includes("../../features/wanderingInk") ||
-        source.includes("../../../features/wanderingInk")
-      ) {
-        violations.push(relative(process.cwd(), path));
-      }
-    }
-
-    expect(violations).toEqual([]);
+  it("prevents core from importing membrane features", () => {
+    expect(
+      findCoreViolations([
+        "/features/membrane/",
+        "../features/membrane",
+        "../../features/membrane",
+        "../../../features/membrane",
+      ]),
+    ).toEqual([]);
   });
 });
