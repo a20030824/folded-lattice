@@ -10,6 +10,33 @@
       "Tide Archive"
     ]
   },
+  "brightness": {
+    "max": 150,
+    "min": 50,
+    "step": 1,
+    "text": "Brightness",
+    "type": "slider",
+    "help": "Overall brightness of the wallpaper palette",
+    "value": 100
+  },
+  "temperature": {
+    "max": 100,
+    "min": -100,
+    "step": 1,
+    "text": "Temperature",
+    "type": "slider",
+    "help": "Shift the palette between cooler and warmer tones",
+    "value": 0
+  },
+  "tint": {
+    "max": 100,
+    "min": -100,
+    "step": 1,
+    "text": "Tint",
+    "type": "slider",
+    "help": "Shift the palette between green and magenta",
+    "value": 0
+  },
   "edgeBrightness": {
     "max": 100,
     "min": 5,

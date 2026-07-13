@@ -4,6 +4,7 @@ import { createEngine } from "../core/createEngine";
 import type { FoldedLatticeEngine } from "../core/createEngine";
 import type { Viewport } from "../core/types";
 import { resolvePreset } from "../presets/registry";
+import { createPresetColorGradingBindings } from "../wallpaper/colorGrading";
 import { installLivelyBridge } from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
 import { createRendererWithWebglCleanup } from "../wallpaper/webglInitialization";
@@ -60,7 +61,10 @@ function startPreset(name: string | null): void {
     getViewport(),
   );
   const unbindPointer = bindPointerInput(canvas!, engine.getState);
-  const propertyBindings = definition.createPropertyBindings(config);
+  const propertyBindings = [
+    ...definition.createPropertyBindings(config),
+    ...createPresetColorGradingBindings(definition.id, config),
+  ];
   const removeLivelyBridge = installLivelyBridge(propertyBindings, {
     rebuildTopology: engine.rebuildTopology,
     refreshRenderer: engine.refreshRenderer,
