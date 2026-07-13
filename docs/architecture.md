@@ -76,7 +76,7 @@ src/features/membrane/
 
 Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與 types；WebGL fallback policy 仍由 preset 負責。Canvas 與 WebGL renderer 都透過 `pulseConfigKey` 的 optional `.get()` 取得 `PulseConfig.color`：Canvas 缺少設定時不繪製 pulse pass，WebGL 缺少設定時使用 renderer-local warm-star fallback `#e6d2a3`。Canvas renderer 另透過 `membranePulseRuntimeKey` 讀取 pulse resource，WebGL renderer 透過 `membraneLegacyRuntimeKey` 讀取 legacy resource；`aLegacy` / `vLegacy` shader interface 保持不變。
 
-Membrane pulse color 是 simulation feature 的設定，位於 `PulseConfig.color`，不再放入共享 `ColorConfig`。共享 `ColorConfig` 只保留各 preset 可理解的 neutral colors；Wandering Ink 的 `ink` 仍是另一個 feature-specific 設定，後續可獨立搬移。
+Membrane pulse color 位於 `PulseConfig.color`，Wandering Ink color 位於 `CreatureConfig.color`；兩者都不再放入共享 `ColorConfig`。共享 `ColorConfig` 只保留各 preset 都可理解的 neutral colors。
 
 Breathing Membrane 的 `membraneWaveSystem`、`membranePulseSystem` 與 `legacyMemorySystem` 都以各自的 `ModuleConfigKey` 呼叫 `config.modules.require()` 取得必要設定；缺失時直接拋出對應的 `ModuleConfigStore` 錯誤，`enabled=false` 則在建立 scratch 或讀取 runtime 前 no-op。Canvas 與 WebGL renderer 是例外，保留 `pulseConfigKey` 的 optional `.get()`：Canvas 缺少設定時略過 pulse pass，WebGL 缺少設定時使用 `#e6d2a3` fallback。
 
