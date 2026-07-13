@@ -252,6 +252,49 @@ describe("import boundaries", () => {
     expect(source).toContain('"#e6d2a3"');
   });
 
+  it("requires Membrane config in feature systems", () => {
+    const cases = [
+      { fileName: "membraneWave.ts", key: "membraneWaveConfigKey" },
+      { fileName: "membranePulse.ts", key: "pulseConfigKey" },
+      { fileName: "updateLegacy.ts", key: "legacyMemoryConfigKey" },
+    ] as const;
+
+    for (const testCase of cases) {
+      const source = readFileSync(
+        join(
+          process.cwd(),
+          "src",
+          "features",
+          "membrane",
+          testCase.fileName,
+        ),
+        "utf8",
+      );
+
+      expect(source).toMatch(
+        new RegExp(`modules\\.require\\(\\s*${testCase.key}\\s*\\)`),
+      );
+    }
+  });
+
+  it("keeps Membrane renderers tolerant of missing pulse config", () => {
+    for (const fileName of ["canvasRenderer.ts", "webglMembraneRenderer.ts"]) {
+      const source = readFileSync(
+        join(
+          process.cwd(),
+          "src",
+          "features",
+          "membrane",
+          fileName,
+        ),
+        "utf8",
+      );
+
+      expect(source).toMatch(/modules\.get\(\s*pulseConfigKey\s*\)/);
+      expect(source).not.toMatch(/modules\.require\(\s*pulseConfigKey\s*\)/);
+    }
+  });
+
   it("keeps membrane legacy state out of core", () => {
     const coreStateSource = readFileSync(
       join(process.cwd(), "src", "core", "state.ts"),

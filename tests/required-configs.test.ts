@@ -4,7 +4,18 @@ import { createEmptySimulationState } from "../src/core/state";
 import { creaseConfigKey } from "../src/features/crease/config";
 import { creaseLifeSystem } from "../src/features/crease/creaseLife";
 import { creaseTopologyBuilder } from "../src/features/crease/creaseTopology";
-import { pulseConfigKey } from "../src/features/membrane/config";
+import {
+  legacyMemoryConfigKey,
+  membraneWaveConfigKey,
+  pulseConfigKey,
+} from "../src/features/membrane/config";
+import { membranePulseSystem } from "../src/features/membrane/membranePulse";
+import { membraneWaveSystem } from "../src/features/membrane/membraneWave";
+import {
+  requireMembraneLegacyRuntime,
+  requireMembranePulseRuntime,
+} from "../src/features/membrane/state";
+import { legacyMemorySystem } from "../src/features/membrane/updateLegacy";
 import { inkWickSystem } from "../src/features/wanderingInk/inkWick";
 import { creatureConfigKey } from "../src/features/wanderingInk/config";
 import { inkRuntimeKey } from "../src/features/wanderingInk/state";
@@ -15,6 +26,17 @@ import { tideArchivePreset } from "../src/presets/tideArchive";
 import { wanderingInkPreset } from "../src/presets/wanderingInk";
 
 const viewport = { width: 320, height: 240, devicePixelRatio: 1 };
+
+function createMembraneState() {
+  const config = breathingMembranePreset.createConfig();
+  const result = breathingMembranePreset.topologyBuilder.build(viewport, config);
+  const state = createEmptySimulationState(viewport);
+
+  state.topology = result.topology;
+  result.initializeResources?.(state.resources);
+
+  return { config, state };
+}
 
 describe("required module configurations", () => {
   it("keeps Wandering Ink color in the creature feature config", () => {
@@ -31,6 +53,89 @@ describe("required module configurations", () => {
 
     expect(pulse.color).toBe("#f0ddb4");
     expect(config.render.colors).not.toHaveProperty("pulse");
+  });
+
+  it("registers every required Membrane config", () => {
+    const config = breathingMembranePreset.createConfig();
+
+    expect(config.modules.get(pulseConfigKey)).toBeDefined();
+    expect(config.modules.get(membraneWaveConfigKey)).toBeDefined();
+    expect(config.modules.get(legacyMemoryConfigKey)).toBeDefined();
+  });
+
+  it("fails fast when the membrane wave config is missing", () => {
+    const config = breathingMembranePreset.createConfig();
+    const state = createEmptySimulationState(viewport);
+    config.modules = new ModuleConfigStore();
+
+    expect(() => {
+      membraneWaveSystem.update(state, config, 1 / 60);
+    }).toThrow('Module config "breathing-membrane-wave" is not available.');
+  });
+
+  it("fails fast when the membrane pulse config is missing", () => {
+    const config = breathingMembranePreset.createConfig();
+    const state = createEmptySimulationState(viewport);
+    config.modules = new ModuleConfigStore();
+
+    expect(() => {
+      membranePulseSystem.update(state, config, 1 / 60);
+    }).toThrow('Module config "breathing-membrane-pulse" is not available.');
+  });
+
+  it("fails fast when the membrane legacy config is missing", () => {
+    const config = breathingMembranePreset.createConfig();
+    const state = createEmptySimulationState(viewport);
+    config.modules = new ModuleConfigStore();
+
+    expect(() => {
+      legacyMemorySystem.update(state, config, 1 / 60);
+    }).toThrow(
+      'Module config "breathing-membrane-legacy-memory" is not available.',
+    );
+  });
+
+  it("allows Membrane feature systems to be disabled", () => {
+    const { config, state } = createMembraneState();
+    const pulseSettings = config.modules.require(pulseConfigKey);
+    const waveSettings = config.modules.require(membraneWaveConfigKey);
+    const legacySettings = config.modules.require(legacyMemoryConfigKey);
+
+    config.modules.set(pulseConfigKey, { ...pulseSettings, enabled: false });
+    config.modules.set(membraneWaveConfigKey, { ...waveSettings, enabled: false });
+    config.modules.set(legacyMemoryConfigKey, { ...legacySettings, enabled: false });
+
+    const pulseRuntime = requireMembranePulseRuntime(state);
+    const legacyRuntime = requireMembraneLegacyRuntime(state);
+    pulseRuntime.edgePulse[0] = 0.75;
+    legacyRuntime.triangleLegacy[0] = 0.2;
+    legacyRuntime.diffusionScratch[0] = 0.1;
+    state.pointer.isInside = true;
+    state.pointer.isDown = true;
+
+    const forcesBefore = state.topology.nodes.map((node) => ({
+      x: node.force.x,
+      y: node.force.y,
+      z: node.force.z,
+    }));
+    const pulseBefore = Array.from(pulseRuntime.edgePulse);
+    const legacyBefore = Array.from(legacyRuntime.triangleLegacy);
+    const scratchBefore = Array.from(legacyRuntime.diffusionScratch);
+
+    expect(() => {
+      membraneWaveSystem.update(state, config, 1 / 60);
+      membranePulseSystem.update(state, config, 1 / 60);
+      legacyMemorySystem.update(state, config, 1 / 60);
+    }).not.toThrow();
+
+    expect(state.topology.nodes.map((node) => ({
+      x: node.force.x,
+      y: node.force.y,
+      z: node.force.z,
+    }))).toEqual(forcesBefore);
+    expect(Array.from(pulseRuntime.edgePulse)).toEqual(pulseBefore);
+    expect(Array.from(legacyRuntime.triangleLegacy)).toEqual(legacyBefore);
+    expect(Array.from(legacyRuntime.diffusionScratch)).toEqual(scratchBefore);
   });
 
   it("fails fast when the wanderer config is missing", () => {

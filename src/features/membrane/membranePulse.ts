@@ -145,8 +145,8 @@ function spawnPulse(
 export const membranePulseSystem: SimulationSystem = {
   name: "membrane-pulse",
   update(state, config, deltaSeconds) {
-    const settings = config.modules.get(pulseConfigKey);
-    if (!settings?.enabled) return;
+    const settings = config.modules.require(pulseConfigKey);
+    if (!settings.enabled) return;
     const { nodes, edges } = state.topology;
     if (nodes.length === 0) return;
     const pulseRuntime = requireMembranePulseRuntime(state);

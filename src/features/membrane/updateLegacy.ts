@@ -16,8 +16,8 @@ import {
 export const legacyMemorySystem: SimulationSystem = {
   name: "legacy-memory",
   update(state, config, deltaSeconds) {
-    const settings = config.modules.get(legacyMemoryConfigKey);
-    if (!settings?.enabled) return;
+    const settings = config.modules.require(legacyMemoryConfigKey);
+    if (!settings.enabled) return;
 
     const { triangles } = state.topology;
     const pulseRuntime = requireMembranePulseRuntime(state);

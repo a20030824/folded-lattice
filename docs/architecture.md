@@ -78,6 +78,8 @@ Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與
 
 Membrane pulse color 是 simulation feature 的設定，位於 `PulseConfig.color`，不再放入共享 `ColorConfig`。共享 `ColorConfig` 只保留各 preset 可理解的 neutral colors；Wandering Ink 的 `ink` 仍是另一個 feature-specific 設定，後續可獨立搬移。
 
+Breathing Membrane 的 `membraneWaveSystem`、`membranePulseSystem` 與 `legacyMemorySystem` 都以各自的 `ModuleConfigKey` 呼叫 `config.modules.require()` 取得必要設定；缺失時直接拋出對應的 `ModuleConfigStore` 錯誤，`enabled=false` 則在建立 scratch 或讀取 runtime 前 no-op。Canvas 與 WebGL renderer 是例外，保留 `pulseConfigKey` 的 optional `.get()`：Canvas 缺少設定時略過 pulse pass，WebGL 缺少設定時使用 `#e6d2a3` fallback。
+
 Wandering Ink 的 color 位於 `CreatureConfig.color`，不再放入共享 `ColorConfig`。Ink renderer 透過 `creatureConfigKey` 的 optional `.get()` 讀取設定，並把 `inkColor` 納入 palette cache key；缺少 CreatureConfig 時使用 renderer-local fallback `#34425c`，同時不繪製 creature body。
 
 Wandering Ink 的 `wandererSystem`、`inkWickSystem` 與 preset `applyMode()` 都以 `config.modules.require(creatureConfigKey)` 取得必要的 `CreatureConfig`；缺失時拋出 `Module config "wandering-ink-creature" is not available.`。`enabled=false` 讓兩個 system no-op，unknown mode 也不修改設定。Ink renderer 是例外，保留 optional `.get()` 以維持 palette fallback 與缺少 creature body 時的 graceful behavior。

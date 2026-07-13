@@ -27,8 +27,8 @@ const scratchByState = new WeakMap<object, WaveScratch>();
 export const membraneWaveSystem: SimulationSystem = {
   name: "membrane-wave",
   update(state, config, deltaSeconds) {
-    const settings = config.modules.get(membraneWaveConfigKey);
-    if (!settings?.enabled) return;
+    const settings = config.modules.require(membraneWaveConfigKey);
+    if (!settings.enabled) return;
     let scratch = scratchByState.get(state);
     if (!scratch) {
       scratch = {
