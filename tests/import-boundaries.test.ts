@@ -7,6 +7,7 @@ const coreRenderDirectory = join(process.cwd(), "src", "core", "render");
 
 function collectTypeScriptFiles(directory: string): string[] {
   const files: string[] = [];
+  if (!existsSync(directory)) return files;
 
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry);

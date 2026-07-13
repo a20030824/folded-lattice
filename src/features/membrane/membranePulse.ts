@@ -164,7 +164,8 @@ export const membranePulseSystem: SimulationSystem = {
       if (pulse > 0.0005) edgePulse[index] = pulse * cooling;
     }
 
-    const pointerDown = state.pointer.isInside && state.pointer.isDown;
+    const pointerDown =
+      config.fields.pointer.enabled && state.pointer.isInside && state.pointer.isDown;
     const pointerIgnited =
       settings.pointerTrigger && pointerDown && !scratch.pointerWasDown;
     scratch.pointerWasDown = pointerDown;
