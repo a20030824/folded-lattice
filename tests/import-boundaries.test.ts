@@ -21,16 +21,19 @@ function collectTypeScriptFiles(directory: string): string[] {
   return files;
 }
 
-function findCoreViolations(
+function findViolationsInDirectories(
+  directories: readonly string[],
   forbiddenFragments: readonly string[],
 ): string[] {
   const violations: string[] = [];
 
-  for (const path of collectTypeScriptFiles(coreDirectory)) {
-    const source = readFileSync(path, "utf8");
+  for (const directory of directories) {
+    for (const path of collectTypeScriptFiles(directory)) {
+      const source = readFileSync(path, "utf8");
 
-    if (forbiddenFragments.some((fragment) => source.includes(fragment))) {
-      violations.push(relative(process.cwd(), path));
+      if (forbiddenFragments.some((fragment) => source.includes(fragment))) {
+        violations.push(relative(process.cwd(), path));
+      }
     }
   }
 
@@ -40,7 +43,7 @@ function findCoreViolations(
 describe("import boundaries", () => {
   it("prevents core from importing wallpaper adapters", () => {
     expect(
-      findCoreViolations([
+      findViolationsInDirectories([coreDirectory], [
         "/wallpaper/",
         "../wallpaper",
         "../../wallpaper",
@@ -50,7 +53,7 @@ describe("import boundaries", () => {
 
   it("prevents core from importing Wandering Ink features", () => {
     expect(
-      findCoreViolations([
+      findViolationsInDirectories([coreDirectory], [
         "/features/wanderingInk/",
         "../features/wanderingInk",
         "../../features/wanderingInk",
@@ -61,12 +64,39 @@ describe("import boundaries", () => {
 
   it("prevents core from importing membrane features", () => {
     expect(
-      findCoreViolations([
+      findViolationsInDirectories([coreDirectory], [
         "/features/membrane/",
         "../features/membrane",
         "../../features/membrane",
         "../../../features/membrane",
       ]),
+    ).toEqual([]);
+  });
+
+  it("keeps crease implementation out of core topology and simulation", () => {
+    const coreTopologyDirectory = join(
+      process.cwd(),
+      "src",
+      "core",
+      "topology",
+    );
+    const coreSimulationDirectory = join(
+      process.cwd(),
+      "src",
+      "core",
+      "simulation",
+    );
+
+    expect(
+      findViolationsInDirectories(
+        [coreTopologyDirectory, coreSimulationDirectory],
+        [
+          "/features/crease/",
+          "../features/crease",
+          "../../features/crease",
+          "../../../features/crease",
+        ],
+      ),
     ).toEqual([]);
   });
 });

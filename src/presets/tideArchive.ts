@@ -21,7 +21,7 @@ import { springSystem } from "../core/simulation/applySprings";
 import { integrationSystem } from "../core/simulation/integrate";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
-import { creaseTopologyBuilder } from "../core/topology/creaseTopology";
+import { creaseTopologyBuilder } from "../features/crease/creaseTopology";
 import {
   createBooleanBinding,
   createQualityBinding,

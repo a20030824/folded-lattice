@@ -1,15 +1,15 @@
-import type { SimulationSystem } from "../contracts";
-import { clamp, createRandom } from "../math";
-import { creaseConfigKey } from "../../features/crease/config";
-import { getCreaseRuntime } from "../../features/crease/state";
-import type { CreaseFieldState, CreaseState } from "../../features/crease/state";
-import type { SimulationState } from "../state";
+import type { SimulationSystem } from "../../core/contracts";
+import { clamp, createRandom } from "../../core/math";
+import { creaseConfigKey } from "./config";
+import { getCreaseRuntime } from "./state";
+import type { CreaseFieldState, CreaseState } from "./state";
+import type { SimulationState } from "../../core/state";
 import {
   buildCreaseState,
   evaluateCreaseField,
   rebuildTopologyPreservingMotion,
   walkCreasePoints,
-} from "../topology/creaseTopology";
+} from "./creaseTopology";
 
 /**
  * Gives the fold network a layered life cycle:

@@ -3,29 +3,29 @@ import Delaunator from "delaunator";
 import {
   creaseRuntimeKey,
   getCreaseRuntime,
-} from "../../features/crease/state";
-import { creaseConfigKey } from "../../features/crease/config";
+} from "./state";
+import { creaseConfigKey } from "./config";
 import type {
   CreaseConfig,
   CreaseLifeConfig,
-} from "../../features/crease/config";
+} from "./config";
 import type {
   CreaseEdgeState,
   CreaseFieldState,
   CreaseNodeTag,
   CreaseState,
-} from "../../features/crease/state";
-import type { TopologyBuildResult } from "../contracts";
-import type { FoldedLatticeConfig } from "../config";
+} from "./state";
+import type { TopologyBuildResult } from "../../core/contracts";
+import type { FoldedLatticeConfig } from "../../core/config";
 import type {
   EdgeState,
   NodeState,
   SimulationState,
   TopologyState,
   TriangleState,
-} from "../state";
-import type { Viewport } from "../types";
-import { clamp, createRandom, hash01, smoothstep, valueNoise2D } from "../math";
+} from "../../core/state";
+import type { Viewport } from "../../core/types";
+import { clamp, createRandom, hash01, smoothstep, valueNoise2D } from "../../core/math";
 
 interface BuildCreaseNodeTag {
   creaseId: number;

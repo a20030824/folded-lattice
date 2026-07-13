@@ -21,11 +21,11 @@ import {
 } from "../core/propertyBindings";
 import type { PropertyBinding } from "../core/propertyBindings";
 import { springSystem } from "../core/simulation/applySprings";
-import { creaseLifeSystem } from "../core/simulation/creaseLife";
+import { creaseLifeSystem } from "../features/crease/creaseLife";
 import { integrationSystem } from "../core/simulation/integrate";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
-import { creaseTopologyBuilder } from "../core/topology/creaseTopology";
+import { creaseTopologyBuilder } from "../features/crease/creaseTopology";
 
 function createConfig(): FoldedLatticeConfig {
   const config: FoldedLatticeConfig = {
