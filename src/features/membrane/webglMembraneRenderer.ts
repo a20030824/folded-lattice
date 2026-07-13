@@ -2,6 +2,7 @@ import type { Renderer } from "../../core/contracts";
 import { clamp, parseColor } from "../../core/math";
 import type { SimulationState, TopologyState } from "../../core/state";
 import type { Viewport } from "../../core/types";
+import { pulseConfigKey } from "./config";
 import { getMembraneLegacyRuntime } from "./state";
 import vertexShaderSource
   from "./shaders/membrane.vert.glsl?raw";
@@ -420,11 +421,14 @@ export function createWebglMembraneRenderer(
         g: 237,
         b: 242,
       });
-      const warmStars = toRgb01("#e6d2a3", {
-        r: 230,
-        g: 210,
-        b: 163,
-      });
+      const warmStars = toRgb01(
+        config.modules.get(pulseConfigKey)?.color ?? "#e6d2a3",
+        {
+          r: 230,
+          g: 210,
+          b: 163,
+        },
+      );
 
       gl.clearColor(background.r, background.g, background.b, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);

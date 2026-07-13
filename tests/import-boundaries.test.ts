@@ -235,6 +235,23 @@ describe("import boundaries", () => {
     expect(coreConfigSource).not.toMatch(/\bpulse\??\s*:\s*string\b/);
   });
 
+  it("keeps WebGL membrane pulse color connected to the feature config", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "src",
+        "features",
+        "membrane",
+        "webglMembraneRenderer.ts",
+      ),
+      "utf8",
+    );
+
+    expect(source).toContain("pulseConfigKey");
+    expect(source).toMatch(/modules\.get\(\s*pulseConfigKey\s*\)\?\.color/);
+    expect(source).toContain('"#e6d2a3"');
+  });
+
   it("keeps membrane legacy state out of core", () => {
     const coreStateSource = readFileSync(
       join(process.cwd(), "src", "core", "state.ts"),

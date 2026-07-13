@@ -74,7 +74,7 @@ src/features/membrane/
     membrane.frag.glsl
 ```
 
-Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與 types；WebGL fallback policy 仍由 preset 負責。Canvas renderer 透過 `membranePulseRuntimeKey` 讀取 pulse resource，並透過 `pulseConfigKey` 的 optional `.get()` 取得 pulse color；缺少 `PulseConfig` 或 `color` 時不繪製 pulse pass。WebGL renderer 透過 `membraneLegacyRuntimeKey` 讀取 legacy resource；`aLegacy` / `vLegacy` shader interface 保持不變。
+Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與 types；WebGL fallback policy 仍由 preset 負責。Canvas 與 WebGL renderer 都透過 `pulseConfigKey` 的 optional `.get()` 取得 `PulseConfig.color`：Canvas 缺少設定時不繪製 pulse pass，WebGL 缺少設定時使用 renderer-local warm-star fallback `#e6d2a3`。Canvas renderer 另透過 `membranePulseRuntimeKey` 讀取 pulse resource，WebGL renderer 透過 `membraneLegacyRuntimeKey` 讀取 legacy resource；`aLegacy` / `vLegacy` shader interface 保持不變。
 
 Membrane pulse color 是 simulation feature 的設定，位於 `PulseConfig.color`，不再放入共享 `ColorConfig`。共享 `ColorConfig` 只保留各 preset 可理解的 neutral colors；Wandering Ink 的 `ink` 仍是另一個 feature-specific 設定，後續可獨立搬移。
 
