@@ -8,6 +8,7 @@ export interface FoldedLatticeEngine {
   start(): void;
   stop(): void;
   resize(viewport: Viewport): void;
+  refreshRenderer(): void;
   rebuildTopology(): void;
   getState(): Readonly<SimulationState>;
   dispose(): void;
@@ -109,6 +110,10 @@ export function createEngine(
       state.viewport = viewport;
       renderer.resize(viewport, config.performance.maximumDevicePixelRatio);
       rebuildTopology();
+    },
+
+    refreshRenderer() {
+      renderer.resize(state.viewport, config.performance.maximumDevicePixelRatio);
     },
 
     rebuildTopology,
