@@ -3,6 +3,7 @@ import { clamp, mixRgb, parseColor, rgbString } from "../../core/math";
 import type { Rgb } from "../../core/math";
 import type { NodeState } from "../../core/state";
 import type { Viewport } from "../../core/types";
+import { pulseConfigKey } from "./config";
 import { getMembranePulseRuntime } from "./state";
 
 const TRIANGLE_LUT_STEPS = 24;
@@ -28,16 +29,18 @@ interface Palette {
   pulse: string | null;
 }
 
-function buildPalette(colors: {
-  background: string;
-  edge: string;
-  edgeHighlight: string;
-  trianglePositive: string;
-  triangleNegative: string;
-  glow: string;
-  pulse?: string;
-}): Palette {
-  const key = buildPaletteKey(colors);
+function buildPalette(
+  colors: {
+    background: string;
+    edge: string;
+    edgeHighlight: string;
+    trianglePositive: string;
+    triangleNegative: string;
+    glow: string;
+  },
+  pulseColor: string | undefined,
+): Palette {
+  const key = buildPaletteKey(colors, pulseColor);
 
   const background = parseColor(colors.background, { r: 10, g: 14, b: 19 });
   const glow = parseColor(colors.glow, { r: 120, g: 160, b: 175 });
@@ -66,7 +69,7 @@ function buildPalette(colors: {
     edgeStroke,
     edgeHighlight: rgbString(highlight),
     glint: rgbString(mixRgb(highlight, { r: 255, g: 255, b: 255 }, 0.4)),
-    pulse: colors.pulse ? rgbString(parseColor(colors.pulse)) : null,
+    pulse: pulseColor ? rgbString(parseColor(pulseColor)) : null,
   };
 }
 
@@ -185,6 +188,7 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
           ? pulseRuntime.edgePulse
           : undefined;
       const render = config.render;
+      const pulseColor = config.modules.get(pulseConfigKey)?.color;
       const atmosphere = render.atmosphere;
       const maximumDepth = Math.max(
         1,
@@ -201,8 +205,8 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
         return structureFloor + (visibility - structureFloor) * transition;
       };
 
-      if (!palette || palette.key !== buildPaletteKey(render.colors)) {
-        palette = buildPalette(render.colors);
+      if (!palette || palette.key !== buildPaletteKey(render.colors, pulseColor)) {
+        palette = buildPalette(render.colors, pulseColor);
         glowSprite = buildGlowSprite(palette.glow);
         backdropKey = "";
       }
@@ -417,15 +421,17 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): Renderer {
   };
 }
 
-function buildPaletteKey(colors: {
-  background: string;
-  edge: string;
-  edgeHighlight: string;
-  trianglePositive: string;
-  triangleNegative: string;
-  glow: string;
-  pulse?: string;
-}): string {
+function buildPaletteKey(
+  colors: {
+    background: string;
+    edge: string;
+    edgeHighlight: string;
+    trianglePositive: string;
+    triangleNegative: string;
+    glow: string;
+  },
+  pulseColor: string | undefined,
+): string {
   return [
     colors.background,
     colors.edge,
@@ -433,6 +439,6 @@ function buildPaletteKey(colors: {
     colors.trianglePositive,
     colors.triangleNegative,
     colors.glow,
-    colors.pulse ?? "",
+    pulseColor ?? "",
   ].join("|");
 }

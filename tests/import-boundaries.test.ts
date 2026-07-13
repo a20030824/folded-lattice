@@ -226,6 +226,15 @@ describe("import boundaries", () => {
     expect(coreStateSource).not.toMatch(/\bpulse\s*:\s*number\b/);
   });
 
+  it("keeps membrane pulse color out of core config", () => {
+    const coreConfigSource = readFileSync(
+      join(process.cwd(), "src", "core", "config.ts"),
+      "utf8",
+    );
+
+    expect(coreConfigSource).not.toMatch(/\bpulse\??\s*:\s*string\b/);
+  });
+
   it("keeps membrane legacy state out of core", () => {
     const coreStateSource = readFileSync(
       join(process.cwd(), "src", "core", "state.ts"),

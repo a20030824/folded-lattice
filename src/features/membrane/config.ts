@@ -8,6 +8,8 @@ import { createModuleConfigKey } from "../../core/moduleConfig";
  */
 export interface PulseConfig {
   enabled: boolean;
+  /** Warm color of the travelling pulse front. */
+  color: string;
   /**
    * Average pause between pulses, randomized ±30%.
    */

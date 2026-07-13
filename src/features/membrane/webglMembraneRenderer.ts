@@ -420,7 +420,7 @@ export function createWebglMembraneRenderer(
         g: 237,
         b: 242,
       });
-      const warmStars = toRgb01(config.render.colors.pulse ?? "#e6d2a3", {
+      const warmStars = toRgb01("#e6d2a3", {
         r: 230,
         g: 210,
         b: 163,

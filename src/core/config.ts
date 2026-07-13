@@ -113,11 +113,6 @@ export interface ColorConfig {
    */
   glow: string;
   /**
-   * Warm "now" color of a travelling tension pulse. Absent means the
-   * renderer never draws a pulse pass.
-   */
-  pulse?: string;
-  /**
    * Body color of the wandering line-creature.
    */
   ink?: string;

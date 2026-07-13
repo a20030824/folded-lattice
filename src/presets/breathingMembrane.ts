@@ -135,7 +135,6 @@ function createConfig(): FoldedLatticeConfig {
       trianglePositive: "#b9cdd8",
       triangleNegative: "#274050",
       glow: "#5f8ba0",
-      pulse: "#f0ddb4",
     },
   },
   performance: {
@@ -169,6 +168,7 @@ function createConfig(): FoldedLatticeConfig {
 
   const pulseConfig: PulseConfig = {
     enabled: true,
+    color: "#f0ddb4",
     intervalSeconds: 3,
     speedRatio: 0.1,
     bandRatio: 0.055,
