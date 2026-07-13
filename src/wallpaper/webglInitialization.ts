@@ -115,7 +115,9 @@ export function createRendererWithWebglCleanup(
   createRenderer: () => PresetRendererResult,
 ): PresetRendererResult {
   const getContext = canvas.getContext.bind(canvas) as GenericGetContext;
-  let tracker: WebGlResourceTracker | null = null;
+  const trackerRef: { current: WebGlResourceTracker | null } = {
+    current: null,
+  };
 
   const restoreGetContext = replaceProperty(
     canvas,
@@ -123,12 +125,12 @@ export function createRendererWithWebglCleanup(
     (contextId: string, options?: unknown): RenderingContext | null => {
       const context = getContext(contextId, options);
       if (
-        !tracker &&
+        !trackerRef.current &&
         (contextId === "webgl" || contextId === "experimental-webgl") &&
         context &&
         isWebGlContext(context)
       ) {
-        tracker = trackWebGlResources(context);
+        trackerRef.current = trackWebGlResources(context);
       }
       return context;
     },
@@ -136,14 +138,17 @@ export function createRendererWithWebglCleanup(
 
   try {
     const result = createRenderer();
-    if (result.canvas === canvas) tracker?.finalizeSuccessfulInitialization();
-    else tracker?.cleanupFailedInitialization();
+    if (result.canvas === canvas) {
+      trackerRef.current?.finalizeSuccessfulInitialization();
+    } else {
+      trackerRef.current?.cleanupFailedInitialization();
+    }
     return result;
   } catch (error) {
-    tracker?.cleanupFailedInitialization();
+    trackerRef.current?.cleanupFailedInitialization();
     throw error;
   } finally {
-    tracker?.restoreMethods();
+    trackerRef.current?.restoreMethods();
     restoreGetContext();
   }
 }
