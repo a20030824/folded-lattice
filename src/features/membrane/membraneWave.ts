@@ -41,7 +41,8 @@ export const membraneWaveSystem: SimulationSystem = {
     }
 
     const shortSide = Math.max(1, Math.min(state.viewport.width, state.viewport.height));
-    const pointerDown = state.pointer.isInside && state.pointer.isDown;
+    const pointerDown =
+      config.fields.pointer.enabled && state.pointer.isInside && state.pointer.isDown;
     const addDisturbance = (
       x: number,
       y: number,
