@@ -6,13 +6,13 @@ import type {
 import { ModuleConfigStore } from "../core/moduleConfig";
 import { pointerSmoothingSystem } from "../core/fields/mouseField";
 import { memorySystem } from "../core/memory/updateMemory";
-import { createInkRenderer } from "../core/render/inkRenderer";
+import { createInkRenderer } from "../features/wanderingInk/inkRenderer";
 import { springSystem } from "../core/simulation/applySprings";
 import { integrationSystem } from "../core/simulation/integrate";
-import { inkWickSystem } from "../core/simulation/inkWick";
+import { inkWickSystem } from "../features/wanderingInk/inkWick";
 import { resetForcesSystem } from "../core/simulation/resetForces";
 import { geometrySystem } from "../core/simulation/updateGeometry";
-import { wandererSystem } from "../core/simulation/wanderer";
+import { wandererSystem } from "../features/wanderingInk/wanderer";
 import { delaunayTopologyBuilder } from "../core/topology/buildTopology";
 import {
   createBooleanBinding,

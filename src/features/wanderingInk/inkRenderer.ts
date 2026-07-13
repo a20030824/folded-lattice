@@ -1,9 +1,9 @@
-﻿import type { Renderer } from "../contracts";
-import { clamp, mixRgb, parseColor, rgbString, valueNoise2D } from "../math";
-import type { Rgb } from "../math";
-import type { Viewport } from "../types";
-import { getInkRuntime } from "../../features/wanderingInk/state";
-import { creatureConfigKey } from "../../features/wanderingInk/config";
+import type { Renderer } from "../../core/contracts";
+import { clamp, mixRgb, parseColor, rgbString, valueNoise2D } from "../../core/math";
+import type { Rgb } from "../../core/math";
+import type { Viewport } from "../../core/types";
+import { getInkRuntime } from "./state";
+import { creatureConfigKey } from "./config";
 
 /**
  * The relief is rasterized small and blurred up: facets melt into one

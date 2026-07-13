@@ -1,8 +1,8 @@
-import type { SimulationSystem } from "../contracts";
-import { clamp } from "../math";
-import { creatureConfigKey } from "../../features/wanderingInk/config";
-import { getInkRuntime } from "../../features/wanderingInk/state";
-import type { SimulationState } from "../state";
+import type { SimulationSystem } from "../../core/contracts";
+import { clamp } from "../../core/math";
+import { creatureConfigKey } from "./config";
+import { getInkRuntime } from "./state";
+import type { SimulationState } from "../../core/state";
 
 /**
  * Seconds for soaked ink to dry out of a fibre once nothing feeds it.

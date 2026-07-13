@@ -46,7 +46,9 @@ platform adapter → property bindings
 
 `SimulationSystem` 在固定時間步更新 state，`FrameSystem` 在每個繪製 frame 更新非固定步驟的資料。system 透過 contract 接收 state 與 config，不知道目前是哪個 preset。
 
-共享系統位於 `src/core/fields`、`src/core/memory`、`src/core/reveal`、`src/core/simulation`；preset 只在自己的定義中排列需要的系統。這使同一個 pressure、spring、memory 或 pointer 系統可被多個作品重用。
+共享 system 位於 `src/core/fields`、`src/core/memory`、`src/core/reveal`、`src/core/simulation`；作品專屬 system 位於各自的 `src/features/` 目錄。preset 只在自己的定義中排列需要的系統。這使同一個 pressure、spring、memory 或 pointer 系統可被多個作品重用。
+
+Wandering Ink 的 `config.ts`、`state.ts`、`types.ts`、`wanderer.ts`、`inkWick.ts` 與 `inkRenderer.ts` 現在都位於 `src/features/wanderingInk/`。其中前三者管理設定與 runtime 型別，後三者分別提供作品專屬的 simulation systems 與 renderer；它們只從 `core` 取用共享 contract、math、state、config 與 types。
 
 ### Preset
 

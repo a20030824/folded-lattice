@@ -1,9 +1,9 @@
-﻿import type { SimulationSystem } from "../contracts";
-import { clamp, valueNoise2D } from "../math";
-import { creatureConfigKey } from "../../features/wanderingInk/config";
-import { getInkRuntime } from "../../features/wanderingInk/state";
-import type { CreatureState } from "../../features/wanderingInk/types";
-import type { SimulationState } from "../state";
+import type { SimulationSystem } from "../../core/contracts";
+import { clamp, valueNoise2D } from "../../core/math";
+import { creatureConfigKey } from "./config";
+import { getInkRuntime } from "./state";
+import type { CreatureState } from "./types";
+import type { SimulationState } from "../../core/state";
 
 /**
  * Fear fades over ~6 seconds: leaving the fright radius does not mean

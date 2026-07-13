@@ -39,4 +39,23 @@ describe("import boundaries", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("prevents core from importing Wandering Ink features", () => {
+    const violations: string[] = [];
+
+    for (const path of collectTypeScriptFiles(coreDirectory)) {
+      const source = readFileSync(path, "utf8");
+
+      if (
+        source.includes("/features/wanderingInk/") ||
+        source.includes("../features/wanderingInk") ||
+        source.includes("../../features/wanderingInk") ||
+        source.includes("../../../features/wanderingInk")
+      ) {
+        violations.push(relative(process.cwd(), path));
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
 });
