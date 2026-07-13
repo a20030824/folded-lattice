@@ -142,6 +142,8 @@ Contour renderer 是 Tide Archive 專屬的 renderer，讀取 Tide Archive conto
 
 `ModuleConfigStore` 是 feature 設定的 typed key/value 容器。preset 在 `createConfig()` 中寫入 feature config；system、topology builder 與 renderer 透過 feature key 取得設定。這與 `ResourceStore` 分開：前者是相對穩定、可由平台 binding 修改的設定，後者是每次模擬持續變化的 runtime 資料。
 
+Crease topology builder 與 lifecycle system 都以 `config.modules.require(creaseConfigKey)` 取得必要設定；缺失時直接拋出 `Module config "crease-config" is not available.`。`life` 可以省略或設定 `enabled=false`，兩種情況都由 lifecycle system no-op。Paper renderer 則保留 `.get()`，對缺失的 Crease config 維持 graceful fallback。
+
 ### TopologyBuilder
 
 `TopologyBuilder` 接收 viewport 與共享 config，回傳 `TopologyBuildResult`。結果包含通用 `TopologyState`，也可提供 `initializeResources` 來初始化 feature runtime。Delaunay 與 crease topology 都遵守同一個 contract；引擎不需要知道使用哪一種幾何。

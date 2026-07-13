@@ -58,26 +58,6 @@ interface WalkBounds {
   maxY: number;
 }
 
-const fallbackCrease: CreaseConfig = {
-  majorCount: 3,
-  minorCount: 7,
-  amplitudeRatio: 0.045,
-  majorWidthRatio: 0.11,
-  minorWidthRatio: 0.065,
-  creaseSpacingRatio: 0.032,
-  nearDensityRatio: 0.034,
-  farDensityRatio: 0.095,
-  densityFalloffRatio: 0.24,
-  grainOpacity: 0.05,
-  valleyShadowStrength: 0.5,
-  ridgeLightStrength: 0.5,
-  paperLit: "#3b372e",
-  paperShadow: "#15130f",
-  ridgeColor: "#eadfc7",
-  shadowTint: "#242b3a",
-  curliness: 0.02,
-};
-
 /**
  * Walks a fold line: near-straight, but with a per-crease curvature and a
  * bounded wander. Real creases are set by a hand, not a ruler.
@@ -425,7 +405,7 @@ export function buildTopologyFromCreaseField(
   scatterSeed: number,
   carryPoints?: { x: number; y: number }[],
 ): TopologyBuildResult {
-  const settings = config.modules.get(creaseConfigKey) ?? fallbackCrease;
+  const settings = config.modules.require(creaseConfigKey);
   const seed = field.waveSeed;
   const random = createRandom(scatterSeed);
   const shortSide = Math.min(viewport.width, viewport.height);
@@ -820,7 +800,7 @@ export function buildTopologyFromCreaseField(
 
 export const creaseTopologyBuilder = {
   build(viewport: Viewport, config: FoldedLatticeConfig): TopologyBuildResult {
-    const settings = config.modules.get(creaseConfigKey) ?? fallbackCrease;
+    const settings = config.modules.require(creaseConfigKey);
     const seed = config.topology.randomSeed;
     const field = generateCreaseField(viewport, settings, settings.life, seed);
     return buildTopologyFromCreaseField(viewport, config, field, seed + 7717);

@@ -200,9 +200,9 @@ export const creaseLifeSystem: SimulationSystem = {
   name: "crease-life",
   update(state, config, deltaSeconds) {
     const field = getCreaseRuntime(state).creaseField;
-    const settings = config.modules.get(creaseConfigKey);
-    const life = settings?.life;
-    if (!field || !settings || !life?.enabled) return;
+    const settings = config.modules.require(creaseConfigKey);
+    const life = settings.life;
+    if (!life?.enabled) return;
 
     let scratch = scratchByState.get(state);
     if (!scratch) {
