@@ -81,34 +81,38 @@ interface Palette {
   inkSolid: string;
 }
 
-function buildPaletteKey(colors: {
-  background: string;
-  trianglePositive: string;
-  triangleNegative: string;
-  glow: string;
-  ink?: string;
-}): string {
+function buildPaletteKey(
+  colors: {
+    background: string;
+    trianglePositive: string;
+    triangleNegative: string;
+    glow: string;
+  },
+  inkColor: string | undefined,
+): string {
   return [
     colors.background,
     colors.trianglePositive,
     colors.triangleNegative,
     colors.glow,
-    colors.ink ?? "",
+    inkColor ?? "",
   ].join("|");
 }
 
-function buildPalette(colors: {
-  background: string;
-  trianglePositive: string;
-  triangleNegative: string;
-  glow: string;
-  ink?: string;
-}): Palette {
+function buildPalette(
+  colors: {
+    background: string;
+    trianglePositive: string;
+    triangleNegative: string;
+    glow: string;
+  },
+  inkColor: string | undefined,
+): Palette {
   const background = parseColor(colors.background, { r: 222, g: 215, b: 201 });
   const lit = parseColor(colors.trianglePositive);
   const shadow = parseColor(colors.triangleNegative);
   const lift = parseColor(colors.glow);
-  const ink = parseColor(colors.ink ?? "#34425c");
+  const ink = parseColor(inkColor ?? "#34425c");
 
   const shade: string[] = [];
   for (let step = 0; step < SHADE_LUT_STEPS; step += 1) {
@@ -127,7 +131,7 @@ function buildPalette(colors: {
   }
 
   return {
-    key: buildPaletteKey(colors),
+    key: buildPaletteKey(colors, inkColor),
     background,
     lift,
     // Shadows are never black here either: the vignette cools toward
@@ -240,9 +244,11 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       const { nodes, triangles } = state.topology;
       const render = config.render;
       const colors = render.colors;
+      const creatureConfig = config.modules.get(creatureConfigKey);
+      const inkColor = creatureConfig?.color;
 
-      if (!palette || palette.key !== buildPaletteKey(colors)) {
-        palette = buildPalette(colors);
+      if (!palette || palette.key !== buildPaletteKey(colors, inkColor)) {
+        palette = buildPalette(colors, inkColor);
         backdropKey = "";
       }
 
@@ -407,7 +413,6 @@ export function createInkRenderer(canvas: HTMLCanvasElement): Renderer {
       context.globalAlpha = 1;
       // The creature: one continuous brush stroke, tail melting into
       // the paper, width recorded from its pace when each point was laid.
-      const creatureConfig = config.modules.get(creatureConfigKey);
       if (creature && creatureConfig && creature.points.length > 1) {
         const shortSide = Math.max(
           1,

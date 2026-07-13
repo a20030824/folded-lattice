@@ -125,7 +125,6 @@ function createConfig(): FoldedLatticeConfig {
       trianglePositive: "#f2ebdc",
       triangleNegative: "#aab4c1",
       glow: "#f2ead8",
-      ink: "#34425c",
     },
   },
   performance: {
@@ -139,6 +138,7 @@ function createConfig(): FoldedLatticeConfig {
 
   const creatureConfig: CreatureConfig = {
     enabled: true,
+    color: "#34425c",
     trailCount: 150,
     segmentSpacingRatio: 0.006,
     baseSpeedRatio: 0.085,

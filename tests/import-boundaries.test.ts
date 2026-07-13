@@ -261,4 +261,30 @@ describe("import boundaries", () => {
     expect(coreStateSource).not.toMatch(/\blegacy\s*:\s*number\b/);
     expect(coreStateSource).not.toContain("legacyScratch");
   });
+
+  it("keeps Wandering Ink color out of core config", () => {
+    const coreConfigSource = readFileSync(
+      join(process.cwd(), "src", "core", "config.ts"),
+      "utf8",
+    );
+
+    expect(coreConfigSource).not.toMatch(/\bink\??\s*:\s*string\b/);
+  });
+
+  it("keeps the Ink renderer color connected to the creature feature config", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "src",
+        "features",
+        "wanderingInk",
+        "inkRenderer.ts",
+      ),
+      "utf8",
+    );
+
+    expect(source).toContain("creatureConfigKey");
+    expect(source).toMatch(/const\s+inkColor\s*=\s*creatureConfig\?\.color/);
+    expect(source).toContain('"#34425c"');
+  });
 });

@@ -5,13 +5,23 @@ import { creaseConfigKey } from "../src/features/crease/config";
 import { creaseLifeSystem } from "../src/features/crease/creaseLife";
 import { creaseTopologyBuilder } from "../src/features/crease/creaseTopology";
 import { pulseConfigKey } from "../src/features/membrane/config";
+import { creatureConfigKey } from "../src/features/wanderingInk/config";
 import { breathingMembranePreset } from "../src/presets/breathingMembrane";
 import { crumpledPaperPreset } from "../src/presets/crumpledPaper";
 import { tideArchivePreset } from "../src/presets/tideArchive";
+import { wanderingInkPreset } from "../src/presets/wanderingInk";
 
 const viewport = { width: 320, height: 240, devicePixelRatio: 1 };
 
 describe("required module configurations", () => {
+  it("keeps Wandering Ink color in the creature feature config", () => {
+    const config = wanderingInkPreset.createConfig();
+    const creature = config.modules.require(creatureConfigKey);
+
+    expect(creature.color).toBe("#34425c");
+    expect(config.render.colors).not.toHaveProperty("ink");
+  });
+
   it("keeps membrane pulse color in the pulse feature config", () => {
     const config = breathingMembranePreset.createConfig();
     const pulse = config.modules.require(pulseConfigKey);

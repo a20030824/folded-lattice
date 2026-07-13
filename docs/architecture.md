@@ -78,6 +78,8 @@ Breathing Membrane 的 renderer 只依賴共享 core contract、math、state 與
 
 Membrane pulse color 是 simulation feature 的設定，位於 `PulseConfig.color`，不再放入共享 `ColorConfig`。共享 `ColorConfig` 只保留各 preset 可理解的 neutral colors；Wandering Ink 的 `ink` 仍是另一個 feature-specific 設定，後續可獨立搬移。
 
+Wandering Ink 的 color 位於 `CreatureConfig.color`，不再放入共享 `ColorConfig`。Ink renderer 透過 `creatureConfigKey` 的 optional `.get()` 讀取設定，並把 `inkColor` 納入 palette cache key；缺少 CreatureConfig 時使用 renderer-local fallback `#34425c`，同時不繪製 creature body。
+
 Crease 是 Crumpled Paper 與 Tide Archive 共用的 feature，目錄目前包含：
 
 ```text

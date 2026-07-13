@@ -7,6 +7,8 @@ import { createModuleConfigKey } from "../../core/moduleConfig";
  */
 export interface CreatureConfig {
   enabled: boolean;
+  /** Color of the creature body and the ink absorbed into the paper. */
+  color: string;
   /**
    * Number of body samples; length = trailCount * segmentSpacingRatio.
    */

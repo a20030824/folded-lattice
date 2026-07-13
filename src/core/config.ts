@@ -112,10 +112,6 @@ export interface ColorConfig {
    * Tint of the faint breathing glow under pressure fields.
    */
   glow: string;
-  /**
-   * Body color of the wandering line-creature.
-   */
-  ink?: string;
 }
 
 export interface AtmosphereConfig {
