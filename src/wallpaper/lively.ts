@@ -3,6 +3,7 @@ import type {
   PropertyBinding,
   PropertyBindingContext,
 } from "../core/propertyBindings";
+import { livelyPresetNames } from "../presets/registry";
 
 declare global {
   interface Window {
@@ -32,13 +33,12 @@ export function createLivelyPropertyValues(): LivelyPropertyValues {
 
 let currentBridge: LivelyBridgeEntry | null = null;
 
-const presetNames = ["paper", "ink", "membrane", "tide"] as const;
 function presetNameFromValue(value: unknown): string {
   const index = Math.max(
     0,
-    Math.min(presetNames.length - 1, Math.round(asNumber(value, 0))),
+    Math.min(livelyPresetNames.length - 1, Math.round(asNumber(value, 0))),
   );
-  return presetNames[index]!;
+  return livelyPresetNames[index]!;
 }
 
 export function installLivelyBridge(
