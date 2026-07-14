@@ -7,6 +7,10 @@ import {
   bindWallpaperUrlState,
   readWallpaperUrlState,
 } from "../wallpaper/urlState";
+import {
+  constrainPresetToPackage,
+  readPackagedPreset,
+} from "./packagePreset";
 import { createPresetRuntimeManager } from "./presetRuntimeManager";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#wallpaper");
@@ -18,6 +22,7 @@ const getViewport = (): Viewport => ({
   devicePixelRatio: window.devicePixelRatio || 1,
 });
 
+const packagedPreset = readPackagedPreset();
 const manager = createPresetRuntimeManager({
   canvas,
   getViewport,
@@ -28,12 +33,14 @@ const manager = createPresetRuntimeManager({
       __config: FoldedLatticeConfig;
       __engine: FoldedLatticeEngine;
       __mode: string | null;
+      __packagedPreset: string | null;
       __presetId: string;
     };
     debugWindow.__engine = snapshot.engine;
     debugWindow.__config = snapshot.config;
     debugWindow.__presetId = snapshot.presetId;
     debugWindow.__mode = snapshot.mode;
+    debugWindow.__packagedPreset = packagedPreset;
   },
 });
 
@@ -47,7 +54,7 @@ const onVisibilityChange = (): void => {
 };
 
 const removeUrlStateBinding = bindWallpaperUrlState((state) => {
-  manager.syncUrlState(state);
+  manager.syncUrlState(constrainPresetToPackage(state, packagedPreset));
 });
 
 const dispose = (): void => {
@@ -61,4 +68,6 @@ const dispose = (): void => {
 window.addEventListener("resize", onResize);
 window.addEventListener("beforeunload", dispose, { once: true });
 document.addEventListener("visibilitychange", onVisibilityChange);
-manager.syncUrlState(readWallpaperUrlState());
+manager.syncUrlState(
+  constrainPresetToPackage(readWallpaperUrlState(), packagedPreset),
+);

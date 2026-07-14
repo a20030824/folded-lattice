@@ -1,5 +1,6 @@
 node_modules/
 dist/
+lively-dist/
 *.log
 .DS_Store
 playwright-report/

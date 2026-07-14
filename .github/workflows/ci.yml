@@ -26,8 +26,36 @@ jobs:
       - name: Run tests
         run: npm run test:run
 
-      - name: Build
-        run: npm run build
+      - name: Build app and Lively packages
+        run: npm run build:lively
+
+      - name: Validate Lively archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(
+            crumpled-paper
+            wandering-ink
+            breathing-membrane
+            tide-archive
+          )
+          for package in "${expected[@]}"; do
+            archive="lively-dist/${package}.zip"
+            test -f "$archive"
+            unzip -t "$archive"
+            entries="$(unzip -Z1 "$archive")"
+            grep -qx 'index.html' <<<"$entries"
+            grep -qx 'LivelyInfo.json' <<<"$entries"
+            grep -qx 'LivelyProperties.json' <<<"$entries"
+          done
+
+      - name: Upload Lively packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: lively-packages
+          path: lively-dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
