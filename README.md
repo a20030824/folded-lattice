@@ -48,7 +48,7 @@ src/app/        瀏覽器啟動與 runtime lifecycle
 - [`docs/lively-packages.md`](./docs/lively-packages.md)：四個獨立 Lively 發行包的建置方式
 - [`docs/adding-a-preset.md`](./docs/adding-a-preset.md)：新增 preset 的實作檢查表
 - [`docs/preset-roadmap.md`](./docs/preset-roadmap.md)：已實作與規劃中的作品方向
-- [`設計大競爭.md`](./設計大競爭.md)：各版本概念、自評與迭代紀錄
+- [`設計大競爭.md`](./設計大競爭.md)：四版設計競爭總覽；逐回合完整紀錄另存於 `docs/archive/`
 
 ## Presets
 
