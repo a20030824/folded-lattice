@@ -44,8 +44,8 @@ export function installLivelyBridge(
   const bindingMap = new Map(
     bindings.map((binding) => [binding.name, binding]),
   );
-
-  window.livelyPropertyListener = (name, value) => {
+  const previousListener = window.livelyPropertyListener;
+  const listener = (name: string, value: unknown): void => {
     if (name === "preset") {
       controls.selectPreset(presetNameFromValue(value));
       return;
@@ -54,8 +54,13 @@ export function installLivelyBridge(
     bindingMap.get(name)?.apply(value, context);
   };
 
+  window.livelyPropertyListener = listener;
+
   return () => {
     window.clearTimeout(rebuildTimer);
-    delete window.livelyPropertyListener;
+    if (window.livelyPropertyListener !== listener) return;
+
+    if (previousListener) window.livelyPropertyListener = previousListener;
+    else delete window.livelyPropertyListener;
   };
 }
