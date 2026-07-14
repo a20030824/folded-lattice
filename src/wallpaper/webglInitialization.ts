@@ -11,6 +11,10 @@ interface WebGlResourceTracker {
   restoreMethods(): void;
 }
 
+interface WebGlInitializationOptions {
+  disableWebgl?: boolean;
+}
+
 function replaceProperty(
   target: object,
   property: PropertyKey,
@@ -113,6 +117,7 @@ function trackWebGlResources(
 export function createRendererWithWebglCleanup(
   canvas: HTMLCanvasElement,
   createRenderer: () => PresetRendererResult,
+  options: WebGlInitializationOptions = {},
 ): PresetRendererResult {
   const getContext = canvas.getContext.bind(canvas) as GenericGetContext;
   const trackerRef: { current: WebGlResourceTracker | null } = {
@@ -122,11 +127,15 @@ export function createRendererWithWebglCleanup(
   const restoreGetContext = replaceProperty(
     canvas,
     "getContext",
-    (contextId: string, options?: unknown): RenderingContext | null => {
-      const context = getContext(contextId, options);
+    (contextId: string, contextOptions?: unknown): RenderingContext | null => {
+      const requestsWebgl =
+        contextId === "webgl" || contextId === "experimental-webgl";
+      if (options.disableWebgl && requestsWebgl) return null;
+
+      const context = getContext(contextId, contextOptions);
       if (
         !trackerRef.current &&
-        (contextId === "webgl" || contextId === "experimental-webgl") &&
+        requestsWebgl &&
         context &&
         isWebGlContext(context)
       ) {
