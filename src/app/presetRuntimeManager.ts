@@ -73,23 +73,25 @@ export interface PresetRuntimeManager {
   syncUrlState(state: { preset: string | null; mode: string | null }): boolean;
 }
 
-const defaultServices = {
-  bindPointerInput,
-  bindWebglContextRecovery,
-  createEngine,
-  createPresetColorGradingBindings,
-  createRendererWithWebglCleanup,
-  installLivelyBridge,
-  resolvePreset,
-};
-
 export function createPresetRuntimeManager(
   options: CreatePresetRuntimeManagerOptions,
 ): PresetRuntimeManager {
+  const overrides = options.services;
   const services: PresetRuntimeManagerServices = {
-    ...defaultServices,
-    shouldForceCanvasFallback: createWebglFallbackPolicy(),
-    ...options.services,
+    bindPointerInput: overrides?.bindPointerInput ?? bindPointerInput,
+    bindWebglContextRecovery:
+      overrides?.bindWebglContextRecovery ?? bindWebglContextRecovery,
+    createEngine: overrides?.createEngine ?? createEngine,
+    createPresetColorGradingBindings:
+      overrides?.createPresetColorGradingBindings ??
+      createPresetColorGradingBindings,
+    createRendererWithWebglCleanup:
+      overrides?.createRendererWithWebglCleanup ??
+      createRendererWithWebglCleanup,
+    installLivelyBridge: overrides?.installLivelyBridge ?? installLivelyBridge,
+    resolvePreset: overrides?.resolvePreset ?? resolvePreset,
+    shouldForceCanvasFallback:
+      overrides?.shouldForceCanvasFallback ?? createWebglFallbackPolicy(),
   };
   const livelyPropertyValues = createLivelyPropertyValues();
   const getCurrentMode =
@@ -97,7 +99,8 @@ export function createPresetRuntimeManager(
   const reportError =
     options.onError ??
     ((message: string, error: unknown) => console.error(message, error));
-  const reportWarning = options.onWarning ?? ((message: string) => console.warn(message));
+  const reportWarning =
+    options.onWarning ?? ((message: string) => console.warn(message));
 
   let canvas = options.canvas;
   let runtime: ActiveRuntime | null = null;
@@ -258,6 +261,8 @@ export function createPresetRuntimeManager(
       reportError(`Failed to stage preset "${definition.id}":`, error);
       return false;
     }
+
+    if (!staged) return false;
 
     try {
       previousCanvas.replaceWith(staged.canvas);
