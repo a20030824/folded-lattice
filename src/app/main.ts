@@ -1,5 +1,6 @@
 import "./styles.css";
 
+import type { FoldedLatticeConfig } from "../core/config";
 import type { Renderer } from "../core/contracts";
 import { createEngine } from "../core/createEngine";
 import type { FoldedLatticeEngine } from "../core/createEngine";
@@ -27,6 +28,12 @@ interface ActiveRuntime {
   removeLivelyBridge(): void;
 }
 
+interface StagedPreset {
+  canvas: HTMLCanvasElement;
+  config: FoldedLatticeConfig;
+  runtime: ActiveRuntime;
+}
+
 let runtime: ActiveRuntime | null = null;
 
 function runCleanup(label: string, cleanup: () => void): void {
@@ -50,11 +57,11 @@ function startPreset(name: string | null): void {
   const previousRuntime = runtime;
   const previousCanvas = canvas!;
   const stagingCanvas = previousCanvas.cloneNode(false) as HTMLCanvasElement;
-  let candidateCanvas: HTMLCanvasElement | null = null;
   let candidateRenderer: Renderer | null = null;
   let candidateEngine: FoldedLatticeEngine | null = null;
   let unbindPointer: (() => void) | null = null;
   let removeLivelyBridge: (() => void) | null = null;
+  let staged: StagedPreset | null = null;
 
   const discardCandidate = (): void => {
     if (removeLivelyBridge) {
@@ -75,7 +82,6 @@ function startPreset(name: string | null): void {
     const rendererResult = createRendererWithWebglCleanup(stagingCanvas, () =>
       definition.createRenderer(stagingCanvas, config),
     );
-    candidateCanvas = rendererResult.canvas;
     candidateRenderer = rendererResult.renderer;
 
     candidateEngine = createEngine(
@@ -84,7 +90,10 @@ function startPreset(name: string | null): void {
       candidateRenderer,
       getViewport(),
     );
-    unbindPointer = bindPointerInput(candidateCanvas, candidateEngine.getState);
+    unbindPointer = bindPointerInput(
+      rendererResult.canvas,
+      candidateEngine.getState,
+    );
     const propertyBindings = [
       ...definition.createPropertyBindings(config),
       ...createPresetColorGradingBindings(definition.id, config),
@@ -97,27 +106,38 @@ function startPreset(name: string | null): void {
 
     if (!document.hidden) candidateEngine.start();
 
-    const nextRuntime: ActiveRuntime = {
-      presetId: definition.id,
-      engine: candidateEngine,
-      unbindPointer,
-      removeLivelyBridge,
+    staged = {
+      canvas: rendererResult.canvas,
+      config,
+      runtime: {
+        presetId: definition.id,
+        engine: candidateEngine,
+        unbindPointer,
+        removeLivelyBridge,
+      },
     };
-
-    previousCanvas.replaceWith(candidateCanvas);
-    canvas = candidateCanvas;
-    runtime = nextRuntime;
-
-    // Debug handles for tuning sessions; harmless in production wallpapers.
-    (window as unknown as { __engine: typeof candidateEngine }).__engine =
-      candidateEngine;
-    (window as unknown as { __config: typeof config }).__config = config;
-    (window as unknown as { __presetId: string }).__presetId = definition.id;
   } catch (error) {
     discardCandidate();
-    console.error(`Failed to start preset "${definition.id}":`, error);
+    console.error(`Failed to stage preset "${definition.id}":`, error);
     return;
   }
+
+  try {
+    previousCanvas.replaceWith(staged.canvas);
+  } catch (error) {
+    discardCandidate();
+    console.error(`Failed to commit preset "${definition.id}":`, error);
+    return;
+  }
+
+  canvas = staged.canvas;
+  runtime = staged.runtime;
+
+  // Debug handles for tuning sessions; harmless in production wallpapers.
+  (window as unknown as { __engine: FoldedLatticeEngine }).__engine =
+    staged.runtime.engine;
+  (window as unknown as { __config: FoldedLatticeConfig }).__config = staged.config;
+  (window as unknown as { __presetId: string }).__presetId = definition.id;
 
   if (previousRuntime) disposeRuntime(previousRuntime);
 }
