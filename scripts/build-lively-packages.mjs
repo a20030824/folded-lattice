@@ -19,9 +19,11 @@ const propertiesPath = path.join(
   "public",
   "LivelyProperties.json",
 );
+const licensePath = path.join(repositoryRoot, "LICENSE");
 
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 const sharedProperties = JSON.parse(await readFile(propertiesPath, "utf8"));
+const licenseText = await readFile(licensePath, "utf8");
 const baseHtml = await readFile(path.join(distDirectory, "index.html"), "utf8");
 
 validateManifest(manifest, sharedProperties);
@@ -53,6 +55,7 @@ for (const packageDefinition of manifest.packages) {
     Tags: packageDefinition.tags,
     Version: manifest.version,
   });
+  await writeFile(path.join(packageDirectory, "LICENSE"), licenseText, "utf8");
 
   const packagedHtml = injectPackageMetadata(baseHtml, packageDefinition);
   await writeFile(
