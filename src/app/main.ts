@@ -1,5 +1,7 @@
 import "./styles.css";
 
+import type { FoldedLatticeConfig } from "../core/config";
+import type { Renderer } from "../core/contracts";
 import { createEngine } from "../core/createEngine";
 import type { FoldedLatticeEngine } from "../core/createEngine";
 import type { Viewport } from "../core/types";
@@ -26,62 +28,120 @@ interface ActiveRuntime {
   removeLivelyBridge(): void;
 }
 
+interface StagedPreset {
+  canvas: HTMLCanvasElement;
+  config: FoldedLatticeConfig;
+  runtime: ActiveRuntime;
+}
+
 let runtime: ActiveRuntime | null = null;
 
-function replaceCanvas(): void {
-  const replacement = canvas!.cloneNode(false) as HTMLCanvasElement;
-  canvas!.replaceWith(replacement);
-  canvas = replacement;
+function runCleanup(label: string, cleanup: () => void): void {
+  try {
+    cleanup();
+  } catch (error) {
+    console.error(`Failed to ${label}:`, error);
+  }
+}
+
+function disposeRuntime(target: ActiveRuntime): void {
+  runCleanup("unbind preset pointer input", target.unbindPointer);
+  runCleanup("remove preset Lively bridge", target.removeLivelyBridge);
+  runCleanup("dispose preset engine", target.engine.dispose);
 }
 
 function startPreset(name: string | null): void {
   const definition = resolvePreset(name);
   if (runtime?.presetId === definition.id) return;
 
-  if (runtime) {
-    runtime.unbindPointer();
-    runtime.removeLivelyBridge();
-    runtime.engine.dispose();
-    replaceCanvas();
+  const previousRuntime = runtime;
+  const previousCanvas = canvas!;
+  const stagingCanvas = previousCanvas.cloneNode(false) as HTMLCanvasElement;
+  let candidateRenderer: Renderer | null = null;
+  let candidateEngine: FoldedLatticeEngine | null = null;
+  let unbindPointer: (() => void) | null = null;
+  let removeLivelyBridge: (() => void) | null = null;
+  let staged: StagedPreset | null = null;
+
+  const discardCandidate = (): void => {
+    if (removeLivelyBridge) {
+      runCleanup("remove staged Lively bridge", removeLivelyBridge);
+    }
+    if (unbindPointer) runCleanup("unbind staged pointer input", unbindPointer);
+    if (candidateEngine) {
+      runCleanup("dispose staged engine", candidateEngine.dispose);
+    } else if (candidateRenderer) {
+      runCleanup("dispose staged renderer", candidateRenderer.dispose);
+    }
+  };
+
+  try {
+    const config = definition.createConfig();
+    definition.applyMode?.(config, urlParameters.get("mode"));
+
+    const rendererResult = createRendererWithWebglCleanup(stagingCanvas, () =>
+      definition.createRenderer(stagingCanvas, config),
+    );
+    candidateRenderer = rendererResult.renderer;
+
+    candidateEngine = createEngine(
+      definition,
+      config,
+      candidateRenderer,
+      getViewport(),
+    );
+    unbindPointer = bindPointerInput(
+      rendererResult.canvas,
+      candidateEngine.getState,
+    );
+    const propertyBindings = [
+      ...definition.createPropertyBindings(config),
+      ...createPresetColorGradingBindings(definition.id, config),
+    ];
+    removeLivelyBridge = installLivelyBridge(propertyBindings, {
+      rebuildTopology: candidateEngine.rebuildTopology,
+      refreshRenderer: candidateEngine.refreshRenderer,
+      selectPreset: startPreset,
+    });
+
+    if (!document.hidden) candidateEngine.start();
+
+    staged = {
+      canvas: rendererResult.canvas,
+      config,
+      runtime: {
+        presetId: definition.id,
+        engine: candidateEngine,
+        unbindPointer,
+        removeLivelyBridge,
+      },
+    };
+  } catch (error) {
+    discardCandidate();
+    console.error(`Failed to stage preset "${definition.id}":`, error);
+    return;
   }
 
-  const config = definition.createConfig();
-  definition.applyMode?.(config, urlParameters.get("mode"));
+  if (!staged) return;
 
-  const rendererCanvas = canvas!;
-  const rendererResult = createRendererWithWebglCleanup(rendererCanvas, () =>
-    definition.createRenderer(rendererCanvas, config),
-  );
-  canvas = rendererResult.canvas;
+  try {
+    previousCanvas.replaceWith(staged.canvas);
+  } catch (error) {
+    discardCandidate();
+    console.error(`Failed to commit preset "${definition.id}":`, error);
+    return;
+  }
 
-  const engine = createEngine(
-    definition,
-    config,
-    rendererResult.renderer,
-    getViewport(),
-  );
-  const unbindPointer = bindPointerInput(canvas!, engine.getState);
-  const propertyBindings = [
-    ...definition.createPropertyBindings(config),
-    ...createPresetColorGradingBindings(definition.id, config),
-  ];
-  const removeLivelyBridge = installLivelyBridge(propertyBindings, {
-    rebuildTopology: engine.rebuildTopology,
-    refreshRenderer: engine.refreshRenderer,
-    selectPreset: startPreset,
-  });
+  canvas = staged.canvas;
+  runtime = staged.runtime;
 
-  runtime = {
-    presetId: definition.id,
-    engine,
-    unbindPointer,
-    removeLivelyBridge,
-  };
   // Debug handles for tuning sessions; harmless in production wallpapers.
-  (window as unknown as { __engine: typeof engine }).__engine = engine;
-  (window as unknown as { __config: typeof config }).__config = config;
+  (window as unknown as { __engine: FoldedLatticeEngine }).__engine =
+    staged.runtime.engine;
+  (window as unknown as { __config: FoldedLatticeConfig }).__config = staged.config;
   (window as unknown as { __presetId: string }).__presetId = definition.id;
-  if (!document.hidden) engine.start();
+
+  if (previousRuntime) disposeRuntime(previousRuntime);
 }
 
 let resizeTimer = 0;
@@ -100,9 +160,7 @@ const dispose = (): void => {
   window.clearTimeout(resizeTimer);
   window.removeEventListener("resize", onResize);
   document.removeEventListener("visibilitychange", onVisibilityChange);
-  runtime?.unbindPointer();
-  runtime?.removeLivelyBridge();
-  runtime?.engine.dispose();
+  if (runtime) disposeRuntime(runtime);
   runtime = null;
 };
 

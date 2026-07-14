@@ -16,6 +16,15 @@ interface LivelyBridgeControls {
   selectPreset(name: string): void;
 }
 
+interface LivelyBridgeEntry {
+  active: boolean;
+  listener(name: string, value: unknown): void;
+  previous: LivelyBridgeEntry | null;
+  fallbackListener: Window["livelyPropertyListener"];
+}
+
+let currentBridge: LivelyBridgeEntry | null = null;
+
 const presetNames = ["paper", "ink", "membrane", "tide"] as const;
 function presetNameFromValue(value: unknown): string {
   const index = Math.max(
@@ -44,18 +53,45 @@ export function installLivelyBridge(
   const bindingMap = new Map(
     bindings.map((binding) => [binding.name, binding]),
   );
+  const previous = currentBridge;
+  const entry: LivelyBridgeEntry = {
+    active: true,
+    previous,
+    fallbackListener: previous
+      ? previous.fallbackListener
+      : window.livelyPropertyListener,
+    listener(name, value) {
+      if (name === "preset") {
+        controls.selectPreset(presetNameFromValue(value));
+        return;
+      }
 
-  window.livelyPropertyListener = (name, value) => {
-    if (name === "preset") {
-      controls.selectPreset(presetNameFromValue(value));
-      return;
-    }
-
-    bindingMap.get(name)?.apply(value, context);
+      bindingMap.get(name)?.apply(value, context);
+    },
   };
+
+  currentBridge = entry;
+  window.livelyPropertyListener = entry.listener;
 
   return () => {
     window.clearTimeout(rebuildTimer);
-    delete window.livelyPropertyListener;
+    if (!entry.active) return;
+    entry.active = false;
+    if (currentBridge !== entry) return;
+
+    let previousActive = entry.previous;
+    while (previousActive && !previousActive.active) {
+      previousActive = previousActive.previous;
+    }
+    currentBridge = previousActive;
+
+    if (window.livelyPropertyListener !== entry.listener) return;
+    if (previousActive) {
+      window.livelyPropertyListener = previousActive.listener;
+    } else if (entry.fallbackListener) {
+      window.livelyPropertyListener = entry.fallbackListener;
+    } else {
+      delete window.livelyPropertyListener;
+    }
   };
 }
