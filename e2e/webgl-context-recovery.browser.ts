@@ -21,7 +21,7 @@ async function waitForRuntime(
   );
 }
 
-test("WebGL context loss restarts the active preset on a fresh canvas", async ({
+test("WebGL context loss recovers and repeated loss uses Canvas fallback", async ({
   page,
 }) => {
   await page.goto("/?preset=paper");
@@ -92,7 +92,7 @@ test("WebGL context loss restarts the active preset on a fresh canvas", async ({
 
   await page.waitForTimeout(100);
 
-  const after = await page.evaluate(() => {
+  const afterFirstLoss = await page.evaluate(() => {
     const debugWindow = window as typeof window & {
       __config?: {
         performance: { maximumDevicePixelRatio: number };
@@ -117,12 +117,73 @@ test("WebGL context loss restarts the active preset on a fresh canvas", async ({
     };
   });
 
-  expect(after).toEqual({
+  expect(afterFirstLoss).toEqual({
     background: before.background,
     canvasCount: 1,
     maximumDevicePixelRatio: before.maximumDevicePixelRatio,
     oldFrame: oldFrameAfterRecovery,
     presetId: "crumpled-paper",
     replacedCanvas: true,
+  });
+
+  const secondPrevented = await page.evaluate(() => {
+    const debugWindow = window as typeof window & {
+      __engine?: object;
+      __secondLostCanvas?: HTMLCanvasElement;
+      __secondLostEngine?: object;
+    };
+    const activeCanvas = document.querySelector<HTMLCanvasElement>("#wallpaper");
+    if (!activeCanvas || !debugWindow.__engine) {
+      throw new Error("Recovered paper runtime was not available.");
+    }
+
+    debugWindow.__secondLostCanvas = activeCanvas;
+    debugWindow.__secondLostEngine = debugWindow.__engine;
+    const event = new Event("webglcontextlost", { cancelable: true });
+    activeCanvas.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+
+  expect(secondPrevented).toBe(true);
+
+  await page.waitForFunction(() => {
+    const debugWindow = window as typeof window & {
+      __engine?: object;
+      __secondLostCanvas?: HTMLCanvasElement;
+      __secondLostEngine?: object;
+    };
+    return (
+      debugWindow.__engine !== debugWindow.__secondLostEngine &&
+      document.querySelector<HTMLCanvasElement>("#wallpaper") !==
+        debugWindow.__secondLostCanvas
+    );
+  });
+  await waitForRuntime(page, "crumpled-paper");
+
+  const fallback = await page.evaluate(() => {
+    const debugWindow = window as typeof window & {
+      __config?: {
+        performance: { maximumDevicePixelRatio: number };
+        render: { colors: { background: string } };
+      };
+      __presetId?: string;
+    };
+    const activeCanvas = document.querySelector<HTMLCanvasElement>("#wallpaper");
+    return {
+      background: debugWindow.__config?.render.colors.background,
+      canvasCount: document.querySelectorAll("#wallpaper").length,
+      has2dContext: Boolean(activeCanvas?.getContext("2d")),
+      maximumDevicePixelRatio:
+        debugWindow.__config?.performance.maximumDevicePixelRatio,
+      presetId: debugWindow.__presetId,
+    };
+  });
+
+  expect(fallback).toEqual({
+    background: before.background,
+    canvasCount: 1,
+    has2dContext: true,
+    maximumDevicePixelRatio: before.maximumDevicePixelRatio,
+    presetId: "crumpled-paper",
   });
 });
