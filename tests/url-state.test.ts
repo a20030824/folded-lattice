@@ -79,17 +79,26 @@ describe("wallpaper URL state", () => {
     expect(states).toHaveLength(3);
   });
 
-  it("does not overwrite a newer History API wrapper during cleanup", () => {
+  it("shares one wrapper until the last listener is removed", () => {
     const fakeWindow = createFakeWindow();
     vi.stubGlobal("window", fakeWindow);
+    const originalPushState = fakeWindow.history.pushState;
+    const originalReplaceState = fakeWindow.history.replaceState;
 
     const removeFirst = bindWallpaperUrlState(() => undefined);
+    const wrappedPushState = fakeWindow.history.pushState;
+    const wrappedReplaceState = fakeWindow.history.replaceState;
     const removeSecond = bindWallpaperUrlState(() => undefined);
-    const secondPushState = fakeWindow.history.pushState;
+
+    expect(fakeWindow.history.pushState).toBe(wrappedPushState);
+    expect(fakeWindow.history.replaceState).toBe(wrappedReplaceState);
 
     removeFirst();
-    expect(fakeWindow.history.pushState).toBe(secondPushState);
+    expect(fakeWindow.history.pushState).toBe(wrappedPushState);
+    expect(fakeWindow.history.replaceState).toBe(wrappedReplaceState);
 
     removeSecond();
+    expect(fakeWindow.history.pushState).toBe(originalPushState);
+    expect(fakeWindow.history.replaceState).toBe(originalReplaceState);
   });
 });
