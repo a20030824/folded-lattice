@@ -122,6 +122,8 @@ function startPreset(name: string | null): void {
     return;
   }
 
+  if (!staged) return;
+
   try {
     previousCanvas.replaceWith(staged.canvas);
   } catch (error) {
