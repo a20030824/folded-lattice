@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bindWebglContextRecovery } from "../src/wallpaper/webglContextRecovery";
+import {
+  bindWebglContextRecovery,
+  createWebglFallbackPolicy,
+} from "../src/wallpaper/webglContextRecovery";
 
 interface ScheduledCallback {
   callback: () => void;
@@ -61,5 +64,15 @@ describe("WebGL context recovery", () => {
     expect(window.clearTimeout).toHaveBeenCalledWith(scheduled[0]!.id);
     scheduled[0]!.callback();
     expect(recover).not.toHaveBeenCalled();
+  });
+
+  it("forces Canvas only when losses repeat inside the recovery window", () => {
+    const times = [0, 5_000, 20_001, 25_000];
+    const policy = createWebglFallbackPolicy(10_000, () => times.shift()!);
+
+    expect(policy()).toBe(false);
+    expect(policy()).toBe(true);
+    expect(policy()).toBe(false);
+    expect(policy()).toBe(true);
   });
 });
