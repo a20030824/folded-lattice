@@ -1,7 +1,7 @@
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { deflateRawSync } from "node:zlib";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -142,126 +142,38 @@ async function writeJson(filePath, value) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-async function listFiles(directory, root = directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries.sort((left, right) =>
-    left.name.localeCompare(right.name),
-  )) {
-    const absolutePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listFiles(absolutePath, root)));
-    } else if (entry.isFile()) {
-      files.push({
-        absolutePath,
-        archivePath: path.relative(root, absolutePath).split(path.sep).join("/"),
-      });
-    }
-  }
-  return files;
-}
-
 async function createZipFromDirectory(directory, zipPath) {
-  const files = await listFiles(directory);
-  const localParts = [];
-  const centralParts = [];
-  let localOffset = 0;
-  const now = new Date();
-  const { dosDate, dosTime } = toDosDateTime(now);
+  await rm(zipPath, { force: true });
 
-  for (const file of files) {
-    const data = await readFile(file.absolutePath);
-    const deflated = deflateRawSync(data, { level: 9 });
-    const useDeflate = deflated.length < data.length;
-    const body = useDeflate ? deflated : data;
-    const compressionMethod = useDeflate ? 8 : 0;
-    const name = Buffer.from(file.archivePath, "utf8");
-    const crc = crc32(data);
-
-    const localHeader = Buffer.alloc(30);
-    localHeader.writeUInt32LE(0x04034b50, 0);
-    localHeader.writeUInt16LE(20, 4);
-    localHeader.writeUInt16LE(0x0800, 6);
-    localHeader.writeUInt16LE(compressionMethod, 8);
-    localHeader.writeUInt16LE(dosTime, 10);
-    localHeader.writeUInt16LE(dosDate, 12);
-    localHeader.writeUInt32LE(crc, 14);
-    localHeader.writeUInt32LE(body.length, 18);
-    localHeader.writeUInt32LE(data.length, 22);
-    localHeader.writeUInt16LE(name.length, 26);
-    localHeader.writeUInt16LE(0, 28);
-    localParts.push(localHeader, name, body);
-
-    const centralHeader = Buffer.alloc(46);
-    centralHeader.writeUInt32LE(0x02014b50, 0);
-    centralHeader.writeUInt16LE(20, 4);
-    centralHeader.writeUInt16LE(20, 6);
-    centralHeader.writeUInt16LE(0x0800, 8);
-    centralHeader.writeUInt16LE(compressionMethod, 10);
-    centralHeader.writeUInt16LE(dosTime, 12);
-    centralHeader.writeUInt16LE(dosDate, 14);
-    centralHeader.writeUInt32LE(crc, 16);
-    centralHeader.writeUInt32LE(body.length, 20);
-    centralHeader.writeUInt32LE(data.length, 24);
-    centralHeader.writeUInt16LE(name.length, 28);
-    centralHeader.writeUInt16LE(0, 30);
-    centralHeader.writeUInt16LE(0, 32);
-    centralHeader.writeUInt16LE(0, 34);
-    centralHeader.writeUInt16LE(0, 36);
-    centralHeader.writeUInt32LE(0, 38);
-    centralHeader.writeUInt32LE(localOffset, 42);
-    centralParts.push(centralHeader, name);
-
-    localOffset += localHeader.length + name.length + body.length;
+  let result;
+  if (process.platform === "win32") {
+    const source = `${escapePowerShell(path.join(directory, "*"))}`;
+    const destination = escapePowerShell(zipPath);
+    result = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Compress-Archive -Path '${source}' -DestinationPath '${destination}' -CompressionLevel Optimal -Force`,
+      ],
+      { stdio: "inherit" },
+    );
+  } else {
+    result = spawnSync("zip", ["-q", "-r", zipPath, "."], {
+      cwd: directory,
+      stdio: "inherit",
+    });
   }
 
-  const centralDirectory = Buffer.concat(centralParts);
-  const endRecord = Buffer.alloc(22);
-  endRecord.writeUInt32LE(0x06054b50, 0);
-  endRecord.writeUInt16LE(0, 4);
-  endRecord.writeUInt16LE(0, 6);
-  endRecord.writeUInt16LE(files.length, 8);
-  endRecord.writeUInt16LE(files.length, 10);
-  endRecord.writeUInt32LE(centralDirectory.length, 12);
-  endRecord.writeUInt32LE(localOffset, 16);
-  endRecord.writeUInt16LE(0, 20);
-
-  await writeFile(
-    zipPath,
-    Buffer.concat([...localParts, centralDirectory, endRecord]),
-  );
-}
-
-function toDosDateTime(date) {
-  const year = Math.max(1980, date.getFullYear());
-  return {
-    dosDate:
-      ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
-    dosTime:
-      (date.getHours() << 11) |
-      (date.getMinutes() << 5) |
-      Math.floor(date.getSeconds() / 2),
-  };
-}
-
-const crcTable = createCrcTable();
-
-function createCrcTable() {
-  const table = new Uint32Array(256);
-  for (let index = 0; index < 256; index += 1) {
-    let value = index;
-    for (let bit = 0; bit < 8; bit += 1) {
-      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-    }
-    table[index] = value >>> 0;
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(
+      `Archive command failed for ${path.basename(directory)} with status ${result.status}.`,
+    );
   }
-  return table;
 }
 
-function crc32(buffer) {
-  let crc = 0xffffffff;
-  for (const byte of buffer) {
-    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
+function escapePowerShell(value) {
+  return value.replaceAll("'", "''");
 }
