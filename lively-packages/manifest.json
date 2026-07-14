@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "author": "a20030824",
+  "contact": "https://github.com/a20030824/folded-lattice",
+  "packages": [
+    {
+      "slug": "crumpled-paper",
+      "preset": "crumpled-paper",
+      "title": "Folded Lattice — Crumpled Paper",
+      "description": "A quiet sheet of paper accumulates creases under drifting pressure and direct pointer interaction.",
+      "tags": ["generative", "abstract", "paper", "interactive"],
+      "properties": [
+        "brightness",
+        "temperature",
+        "tint",
+        "nodeCount",
+        "pressureStrength",
+        "pressureRadius",
+        "motionSpeed",
+        "mouseInteraction",
+        "mouseStrength",
+        "quality",
+        "targetFps"
+      ]
+    },
+    {
+      "slug": "wandering-ink",
+      "preset": "wandering-ink",
+      "title": "Folded Lattice — Wandering Ink",
+      "description": "A single ink creature wanders over pale paper, leaving a long-lived trail in the folded surface.",
+      "tags": ["generative", "ink", "creature", "interactive"],
+      "properties": [
+        "brightness",
+        "temperature",
+        "tint",
+        "triangleVisibility",
+        "nodeCount",
+        "memoryStrength",
+        "mouseInteraction",
+        "quality",
+        "targetFps"
+      ]
+    },
+    {
+      "slug": "breathing-membrane",
+      "preset": "breathing-membrane",
+      "title": "Folded Lattice — Breathing Membrane",
+      "description": "A translucent triangular membrane breathes, pulses, and carries slowly diffusing structural memory.",
+      "tags": ["generative", "membrane", "abstract", "webgl"],
+      "properties": [
+        "brightness",
+        "temperature",
+        "tint",
+        "edgeBrightness",
+        "triangleVisibility",
+        "nodeCount",
+        "pressureStrength",
+        "pressureRadius",
+        "memoryStrength",
+        "motionSpeed",
+        "mouseInteraction",
+        "quality",
+        "targetFps"
+      ]
+    },
+    {
+      "slug": "tide-archive",
+      "preset": "tide-archive",
+      "title": "Folded Lattice — Tide Archive",
+      "description": "A restrained contour field records moving pressure as an evolving archive of folded terrain.",
+      "tags": ["generative", "contour", "topography", "interactive"],
+      "properties": [
+        "brightness",
+        "temperature",
+        "tint",
+        "edgeBrightness",
+        "nodeCount",
+        "pressureStrength",
+        "pressureRadius",
+        "memoryStrength",
+        "motionSpeed",
+        "mouseInteraction",
+        "mouseStrength",
+        "quality",
+        "targetFps"
+      ]
+    }
+  ]
+}
