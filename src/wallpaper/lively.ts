@@ -57,8 +57,9 @@ export function installLivelyBridge(
   const entry: LivelyBridgeEntry = {
     active: true,
     previous,
-    fallbackListener:
-      previous?.fallbackListener ?? window.livelyPropertyListener,
+    fallbackListener: previous
+      ? previous.fallbackListener
+      : window.livelyPropertyListener,
     listener(name, value) {
       if (name === "preset") {
         controls.selectPreset(presetNameFromValue(value));
