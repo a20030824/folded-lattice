@@ -13,6 +13,10 @@ import {
 } from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
 import {
+  bindWallpaperUrlState,
+  readWallpaperUrlState,
+} from "../wallpaper/urlState";
+import {
   bindWebglContextRecovery,
   createWebglFallbackPolicy,
 } from "../wallpaper/webglContextRecovery";
@@ -27,11 +31,11 @@ const getViewport = (): Viewport => ({
   devicePixelRatio: window.devicePixelRatio || 1,
 });
 
-const urlParameters = new URLSearchParams(window.location.search);
 const livelyPropertyValues = createLivelyPropertyValues();
 const shouldForceCanvasFallback = createWebglFallbackPolicy();
 interface ActiveRuntime {
   presetId: string;
+  mode: string | null;
   engine: FoldedLatticeEngine;
   unbindPointer(): void;
   removeLivelyBridge(): void;
@@ -44,7 +48,14 @@ interface StagedPreset {
   runtime: ActiveRuntime;
 }
 
+interface StartPresetOptions {
+  forceRestart?: boolean;
+  forceCanvasFallback?: boolean;
+  mode?: string | null;
+}
+
 let runtime: ActiveRuntime | null = null;
+let removeUrlStateBinding: (() => void) | null = null;
 
 function runCleanup(label: string, cleanup: () => void): void {
   try {
@@ -66,11 +77,19 @@ function disposeRuntime(target: ActiveRuntime): void {
 
 function startPreset(
   name: string | null,
-  forceRestart = false,
-  forceCanvasFallback = false,
+  options: StartPresetOptions = {},
 ): void {
   const definition = resolvePreset(name);
-  if (!forceRestart && runtime?.presetId === definition.id) return;
+  const requestedMode =
+    options.mode === undefined ? readWallpaperUrlState().mode : options.mode;
+  const mode = definition.applyMode ? requestedMode : null;
+  if (
+    !options.forceRestart &&
+    runtime?.presetId === definition.id &&
+    runtime.mode === mode
+  ) {
+    return;
+  }
 
   const previousRuntime = runtime;
   const previousCanvas = canvas!;
@@ -102,12 +121,12 @@ function startPreset(
 
   try {
     const config = definition.createConfig();
-    definition.applyMode?.(config, urlParameters.get("mode"));
+    definition.applyMode?.(config, mode);
 
     const rendererResult = createRendererWithWebglCleanup(
       stagingCanvas,
       () => definition.createRenderer(stagingCanvas, config),
-      { disableWebgl: forceCanvasFallback },
+      { disableWebgl: options.forceCanvasFallback ?? false },
     );
     candidateRenderer = rendererResult.renderer;
 
@@ -129,7 +148,7 @@ function startPreset(
         presetId: definition.id,
         rebuildTopology: engine.rebuildTopology,
         refreshRenderer: engine.refreshRenderer,
-        selectPreset: startPreset,
+        selectPreset: (selectedPreset) => startPreset(selectedPreset),
       },
       livelyPropertyValues,
     );
@@ -143,7 +162,11 @@ function startPreset(
           ? `WebGL context repeatedly lost for preset "${definition.id}"; using Canvas fallback.`
           : `WebGL context lost for preset "${definition.id}"; restarting the renderer.`,
       );
-      startPreset(definition.id, true, useCanvasFallback);
+      startPreset(definition.id, {
+        forceRestart: true,
+        forceCanvasFallback: useCanvasFallback,
+        mode,
+      });
     });
 
     if (!document.hidden) engine.start();
@@ -153,6 +176,7 @@ function startPreset(
       config,
       runtime: {
         presetId: definition.id,
+        mode,
         engine,
         unbindPointer,
         removeLivelyBridge,
@@ -183,6 +207,7 @@ function startPreset(
     staged.runtime.engine;
   (window as unknown as { __config: FoldedLatticeConfig }).__config = staged.config;
   (window as unknown as { __presetId: string }).__presetId = definition.id;
+  (window as unknown as { __mode: string | null }).__mode = mode;
 
   if (previousRuntime) disposeRuntime(previousRuntime);
 }
@@ -203,11 +228,19 @@ const dispose = (): void => {
   window.clearTimeout(resizeTimer);
   window.removeEventListener("resize", onResize);
   document.removeEventListener("visibilitychange", onVisibilityChange);
+  if (removeUrlStateBinding) {
+    runCleanup("remove wallpaper URL state binding", removeUrlStateBinding);
+    removeUrlStateBinding = null;
+  }
   if (runtime) disposeRuntime(runtime);
   runtime = null;
 };
 
+removeUrlStateBinding = bindWallpaperUrlState(({ preset, mode }) => {
+  startPreset(preset, { mode });
+});
 window.addEventListener("resize", onResize);
 window.addEventListener("beforeunload", dispose, { once: true });
 document.addEventListener("visibilitychange", onVisibilityChange);
-startPreset(urlParameters.get("preset"));
+const initialUrlState = readWallpaperUrlState();
+startPreset(initialUrlState.preset, { mode: initialUrlState.mode });
