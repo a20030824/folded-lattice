@@ -25,6 +25,10 @@ const manifest = JSON.parse(
 const sharedProperties = JSON.parse(
   readFileSync(join(process.cwd(), "public", "LivelyProperties.json"), "utf8"),
 ) as Record<string, unknown>;
+const packageMetadata = JSON.parse(
+  readFileSync(join(process.cwd(), "package.json"), "utf8"),
+) as { license?: string };
+const licenseText = readFileSync(join(process.cwd(), "LICENSE"), "utf8");
 
 describe("Lively package manifest", () => {
   it("defines exactly one standalone package for every preset", () => {
@@ -45,6 +49,15 @@ describe("Lively package manifest", () => {
       expect(entry.description.trim()).not.toBe("");
       expect(entry.tags.length).toBeGreaterThan(0);
     }
+  });
+
+  it("declares and ships the MIT license source", () => {
+    expect(packageMetadata.license).toBe("MIT");
+    expect(licenseText).toMatch(/^MIT License\n/);
+    expect(licenseText).toContain("Copyright (c) 2026 a20030824");
+    expect(licenseText).toContain(
+      "The above copyright notice and this permission notice shall be included",
+    );
   });
 
   it("only exposes controls supported by each standalone preset", () => {

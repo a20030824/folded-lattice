@@ -47,6 +47,8 @@ jobs:
             grep -qx 'index.html' <<<"$entries"
             grep -qx 'LivelyInfo.json' <<<"$entries"
             grep -qx 'LivelyProperties.json' <<<"$entries"
+            grep -qx 'LICENSE' <<<"$entries"
+            unzip -p "$archive" LICENSE | cmp --silent LICENSE -
           done
 
       - name: Upload Lively packages

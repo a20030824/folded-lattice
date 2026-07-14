@@ -26,7 +26,7 @@ npm run test:browser
 
 Vitest 覆蓋 core、topology、systems、feature runtime、preset lifecycle 與 Lively package manifest；Playwright 會透過 Vite 啟動真正的 `index.html` / app entry，驗證 RAF runtime、preset aliases、Lively preset switching、pointer input、URL mode、WebGL recovery 與 Canvas fallback。
 
-`npm run build` 會輸出可離線執行的 `dist/`，普通網站仍是四個 preset 的共同展示頁。`npm run build:lively` 另外輸出 `lively-dist/`，其中包含四個獨立桌布項目與 ZIP；每個項目有固定 preset 和精簡的個人化面板，但共用同一份應用程式碼。開發時維護 `public/LivelyProperties.json`，各發行包的控制清單由 `lively-packages/manifest.json` 決定。
+`npm run build` 會輸出可離線執行的 `dist/`，普通網站仍是四個 preset 的共同展示頁。`npm run build:lively` 另外輸出 `lively-dist/`，其中包含四個獨立桌布項目與 ZIP；每個項目有固定 preset、精簡的個人化面板與 MIT 授權檔，但共用同一份應用程式碼。開發時維護 `public/LivelyProperties.json`，各發行包的控制清單由 `lively-packages/manifest.json` 決定。
 
 Lively 的平台事件由 `src/wallpaper/` 轉換成 preset 提供的 property bindings，核心引擎不依賴 Lively API。
 
@@ -56,3 +56,7 @@ src/app/        瀏覽器啟動與 runtime lifecycle
 - [Breathing Membrane](https://a20030824.github.io/folded-lattice/?preset=membrane)
 - [Crumpled Paper](https://a20030824.github.io/folded-lattice/?preset=paper)
 - [Tide Archive](https://a20030824.github.io/folded-lattice/?preset=tide)
+
+## License
+
+MIT © 2026 a20030824. See [`LICENSE`](./LICENSE).
