@@ -67,21 +67,23 @@ test("History API changes atomically reapply preset and mode state", async ({
 
     window.livelyPropertyListener?.("brightness", 130);
     window.livelyPropertyListener?.("quality", 2);
+    const background = debugWindow.__config?.render.colors.background;
+    const maximumDevicePixelRatio =
+      debugWindow.__config?.performance.maximumDevicePixelRatio;
     debugWindow.__urlOldEngine = debugWindow.__engine;
     const oldFrame = debugWindow.__urlOldEngine?.getState().time.frame ?? -1;
     window.history.pushState({}, "", "?preset=ink&mode=serpent");
 
     return {
-      background: debugWindow.__config?.render.colors.background,
-      maximumDevicePixelRatio:
-        debugWindow.__config?.performance.maximumDevicePixelRatio,
+      background,
+      maximumDevicePixelRatio,
       oldFrame,
     };
   });
 
   await waitForRuntime(page, "wandering-ink", "serpent");
 
-  const serpent = await page.evaluate(() => {
+  const serpentConfig = await page.evaluate(() => {
     const debugWindow = window as typeof window & {
       __config?: {
         performance: { maximumDevicePixelRatio: number };
@@ -90,13 +92,14 @@ test("History API changes atomically reapply preset and mode state", async ({
     };
     return {
       background: debugWindow.__config?.render.colors.background,
-      creature: readCreatureConfig(),
       maximumDevicePixelRatio:
         debugWindow.__config?.performance.maximumDevicePixelRatio,
     };
   });
-
-  expect(serpent).toEqual({
+  expect({
+    ...serpentConfig,
+    creature: await page.evaluate(readCreatureConfig),
+  }).toEqual({
     background: before.background,
     creature: { baseSpeedRatio: 0.068, trailCount: 340 },
     maximumDevicePixelRatio: before.maximumDevicePixelRatio,
