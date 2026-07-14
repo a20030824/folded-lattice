@@ -1,3 +1,21 @@
+const DEFAULT_REPEAT_WINDOW_MS = 10_000;
+
+export function createWebglFallbackPolicy(
+  repeatWindowMs = DEFAULT_REPEAT_WINDOW_MS,
+  now: () => number = () => performance.now(),
+): () => boolean {
+  let previousLossAt: number | null = null;
+
+  return () => {
+    const currentLossAt = now();
+    const forceCanvasFallback =
+      previousLossAt !== null &&
+      currentLossAt - previousLossAt <= repeatWindowMs;
+    previousLossAt = currentLossAt;
+    return forceCanvasFallback;
+  };
+}
+
 export function bindWebglContextRecovery(
   canvas: HTMLCanvasElement,
   recover: () => void,
