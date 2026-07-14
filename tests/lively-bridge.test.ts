@@ -9,6 +9,15 @@ function createControls() {
   };
 }
 
+function stubWindow(listener?: (name: string, value: unknown) => void): void {
+  const fakeWindow = {
+    livelyPropertyListener: listener,
+    clearTimeout: vi.fn(),
+    setTimeout: vi.fn(() => 1),
+  } as unknown as Window & typeof globalThis;
+  vi.stubGlobal("window", fakeWindow);
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -16,12 +25,7 @@ afterEach(() => {
 describe("Lively bridge lifecycle", () => {
   it("restores the previous active bridge and skips bridges already disposed", () => {
     const externalListener = vi.fn();
-    const fakeWindow = {
-      livelyPropertyListener: externalListener,
-      clearTimeout: vi.fn(),
-      setTimeout: vi.fn(() => 1),
-    } as unknown as Window & typeof globalThis;
-    vi.stubGlobal("window", fakeWindow);
+    stubWindow(externalListener);
 
     const originalControls = createControls();
     const removeOriginal = installLivelyBridge([], originalControls);
@@ -45,5 +49,17 @@ describe("Lively bridge lifecycle", () => {
 
     removeCommitted();
     expect(window.livelyPropertyListener).toBe(externalListener);
+  });
+
+  it("removes the listener when every bridge is disposed and no fallback exists", () => {
+    stubWindow();
+
+    const removeOriginal = installLivelyBridge([], createControls());
+    const removeCommitted = installLivelyBridge([], createControls());
+
+    removeOriginal();
+    removeCommitted();
+
+    expect(window.livelyPropertyListener).toBeUndefined();
   });
 });
