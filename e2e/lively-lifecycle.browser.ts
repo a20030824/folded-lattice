@@ -85,6 +85,49 @@ test("preset switching stops the previous engine RAF loop", async ({ page }) => 
   expect(laterFrame).toBe(frameAfterSwitch);
 });
 
+test("Lively values replay into a newly selected preset", async ({ page }) => {
+  await page.goto("/?preset=paper");
+  await waitForRuntime(page, "crumpled-paper");
+
+  await page.evaluate(() => {
+    window.livelyPropertyListener?.("brightness", 130);
+    window.livelyPropertyListener?.("quality", 2);
+    window.livelyPropertyListener?.("mouseInteraction", false);
+    // Paper does not support this binding, but the value should be retained
+    // and applied when the membrane preset is staged.
+    window.livelyPropertyListener?.("memoryStrength", 150);
+    window.livelyPropertyListener?.("preset", 2);
+  });
+
+  await waitForRuntime(page, "breathing-membrane");
+
+  const result = await page.evaluate(() => {
+    const debugWindow = window as typeof window & {
+      __config?: {
+        fields: { pointer: { enabled: boolean } };
+        memory: { edgeRestLengthInfluence: number };
+        performance: { maximumDevicePixelRatio: number };
+        render: { colors: { background: string } };
+      };
+    };
+    return {
+      background: debugWindow.__config?.render.colors.background,
+      edgeRestLengthInfluence:
+        debugWindow.__config?.memory.edgeRestLengthInfluence,
+      maximumDevicePixelRatio:
+        debugWindow.__config?.performance.maximumDevicePixelRatio,
+      mouseInteraction: debugWindow.__config?.fields.pointer.enabled,
+    };
+  });
+
+  expect(result).toEqual({
+    background: "#0d121a",
+    edgeRestLengthInfluence: 0.018000000000000002,
+    maximumDevicePixelRatio: 2.5,
+    mouseInteraction: false,
+  });
+});
+
 test("failed preset commit keeps the previous runtime active", async ({ page }) => {
   await page.goto("/?preset=paper");
   await waitForRuntime(page, "crumpled-paper");

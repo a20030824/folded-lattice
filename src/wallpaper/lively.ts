@@ -11,6 +11,7 @@ declare global {
 }
 
 interface LivelyBridgeControls {
+  presetId: string;
   rebuildTopology(): void;
   refreshRenderer(): void;
   selectPreset(name: string): void;
@@ -21,6 +22,12 @@ interface LivelyBridgeEntry {
   listener(name: string, value: unknown): void;
   previous: LivelyBridgeEntry | null;
   fallbackListener: Window["livelyPropertyListener"];
+}
+
+export type LivelyPropertyValues = Map<string, unknown>;
+
+export function createLivelyPropertyValues(): LivelyPropertyValues {
+  return new Map<string, unknown>();
 }
 
 let currentBridge: LivelyBridgeEntry | null = null;
@@ -37,6 +44,7 @@ function presetNameFromValue(value: unknown): string {
 export function installLivelyBridge(
   bindings: PropertyBinding[],
   controls: LivelyBridgeControls,
+  propertyValues: LivelyPropertyValues = createLivelyPropertyValues(),
 ): () => void {
   let rebuildTimer = 0;
 
@@ -53,6 +61,23 @@ export function installLivelyBridge(
   const bindingMap = new Map(
     bindings.map((binding) => [binding.name, binding]),
   );
+  const unsupportedProperties = new Set<string>();
+
+  const applyProperty = (name: string, value: unknown): void => {
+    const binding = bindingMap.get(name);
+    if (binding) {
+      binding.apply(value, context);
+      return;
+    }
+
+    if (unsupportedProperties.has(name)) return;
+    unsupportedProperties.add(name);
+    console.warn(
+      `Lively property "${name}" is not supported by preset "${controls.presetId}". ` +
+        "The value was saved and will be applied when a supporting preset is selected.",
+    );
+  };
+
   const previous = currentBridge;
   const entry: LivelyBridgeEntry = {
     active: true,
@@ -66,12 +91,21 @@ export function installLivelyBridge(
         return;
       }
 
-      bindingMap.get(name)?.apply(value, context);
+      propertyValues.set(name, value);
+      applyProperty(name, value);
     },
   };
 
   currentBridge = entry;
   window.livelyPropertyListener = entry.listener;
+
+  // Reapply values already received from Lively to a newly staged preset. Only
+  // bindings supported by this preset are replayed; unsupported values remain
+  // stored for a later preset without producing repeated warnings.
+  for (const [name, binding] of bindingMap) {
+    if (!propertyValues.has(name)) continue;
+    binding.apply(propertyValues.get(name), context);
+  }
 
   return () => {
     window.clearTimeout(rebuildTimer);

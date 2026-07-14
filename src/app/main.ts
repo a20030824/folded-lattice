@@ -7,7 +7,10 @@ import type { FoldedLatticeEngine } from "../core/createEngine";
 import type { Viewport } from "../core/types";
 import { resolvePreset } from "../presets/registry";
 import { createPresetColorGradingBindings } from "../wallpaper/colorGrading";
-import { installLivelyBridge } from "../wallpaper/lively";
+import {
+  createLivelyPropertyValues,
+  installLivelyBridge,
+} from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
 import { createRendererWithWebglCleanup } from "../wallpaper/webglInitialization";
 
@@ -21,6 +24,7 @@ const getViewport = (): Viewport => ({
 });
 
 const urlParameters = new URLSearchParams(window.location.search);
+const livelyPropertyValues = createLivelyPropertyValues();
 interface ActiveRuntime {
   presetId: string;
   engine: FoldedLatticeEngine;
@@ -98,11 +102,16 @@ function startPreset(name: string | null): void {
       ...definition.createPropertyBindings(config),
       ...createPresetColorGradingBindings(definition.id, config),
     ];
-    removeLivelyBridge = installLivelyBridge(propertyBindings, {
-      rebuildTopology: candidateEngine.rebuildTopology,
-      refreshRenderer: candidateEngine.refreshRenderer,
-      selectPreset: startPreset,
-    });
+    removeLivelyBridge = installLivelyBridge(
+      propertyBindings,
+      {
+        presetId: definition.id,
+        rebuildTopology: candidateEngine.rebuildTopology,
+        refreshRenderer: candidateEngine.refreshRenderer,
+        selectPreset: startPreset,
+      },
+      livelyPropertyValues,
+    );
 
     if (!document.hidden) candidateEngine.start();
 
