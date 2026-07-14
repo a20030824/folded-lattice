@@ -42,12 +42,13 @@ src/app/        瀏覽器啟動與 runtime lifecycle
 
 閱讀順序：
 
+- [`docs/art-direction.md`](./docs/art-direction.md)：現行藝術方向、動態語言與視覺禁區
 - [`docs/architecture.md`](./docs/architecture.md)：模組邊界、資料所有權與依賴方向
 - [`docs/runtime-lifecycle.md`](./docs/runtime-lifecycle.md)：preset staging、commit、rollback 與 cleanup
 - [`docs/lively-packages.md`](./docs/lively-packages.md)：四個獨立 Lively 發行包的建置方式
 - [`docs/adding-a-preset.md`](./docs/adding-a-preset.md)：新增 preset 的實作檢查表
 - [`docs/preset-roadmap.md`](./docs/preset-roadmap.md)：已實作與規劃中的作品方向
-- [`初始.md`](./初始.md)：完整的原始設計背景
+- [`設計大競爭.md`](./設計大競爭.md)：各版本概念、自評與迭代紀錄
 
 ## Presets
 
