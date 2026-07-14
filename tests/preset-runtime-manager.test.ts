@@ -234,8 +234,8 @@ describe("preset runtime manager", () => {
     expect(harness.engines[1]!.engine.dispose).toHaveBeenCalledTimes(1);
     expect(harness.cleanupEvents).toEqual([
       "1:recovery",
-      "1:pointer",
       "1:lively",
+      "1:pointer",
       "1:engine",
     ]);
     expect(harness.errors).toEqual([
