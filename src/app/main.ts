@@ -12,7 +12,10 @@ import {
   installLivelyBridge,
 } from "../wallpaper/lively";
 import { bindPointerInput } from "../wallpaper/pointer";
-import { bindWebglContextRecovery } from "../wallpaper/webglContextRecovery";
+import {
+  bindWebglContextRecovery,
+  createWebglFallbackPolicy,
+} from "../wallpaper/webglContextRecovery";
 import { createRendererWithWebglCleanup } from "../wallpaper/webglInitialization";
 
 let canvas = document.querySelector<HTMLCanvasElement>("#wallpaper");
@@ -26,6 +29,7 @@ const getViewport = (): Viewport => ({
 
 const urlParameters = new URLSearchParams(window.location.search);
 const livelyPropertyValues = createLivelyPropertyValues();
+const shouldForceCanvasFallback = createWebglFallbackPolicy();
 interface ActiveRuntime {
   presetId: string;
   engine: FoldedLatticeEngine;
@@ -60,7 +64,11 @@ function disposeRuntime(target: ActiveRuntime): void {
   runCleanup("dispose preset engine", target.engine.dispose);
 }
 
-function startPreset(name: string | null, forceRestart = false): void {
+function startPreset(
+  name: string | null,
+  forceRestart = false,
+  forceCanvasFallback = false,
+): void {
   const definition = resolvePreset(name);
   if (!forceRestart && runtime?.presetId === definition.id) return;
 
@@ -96,8 +104,10 @@ function startPreset(name: string | null, forceRestart = false): void {
     const config = definition.createConfig();
     definition.applyMode?.(config, urlParameters.get("mode"));
 
-    const rendererResult = createRendererWithWebglCleanup(stagingCanvas, () =>
-      definition.createRenderer(stagingCanvas, config),
+    const rendererResult = createRendererWithWebglCleanup(
+      stagingCanvas,
+      () => definition.createRenderer(stagingCanvas, config),
+      { disableWebgl: forceCanvasFallback },
     );
     candidateRenderer = rendererResult.renderer;
 
@@ -127,10 +137,13 @@ function startPreset(name: string | null, forceRestart = false): void {
     const activeCanvas = rendererResult.canvas;
     removeWebglContextRecovery = bindWebglContextRecovery(activeCanvas, () => {
       if (canvas !== activeCanvas || runtime?.engine !== engine) return;
+      const useCanvasFallback = shouldForceCanvasFallback();
       console.warn(
-        `WebGL context lost for preset "${definition.id}"; restarting the renderer.`,
+        useCanvasFallback
+          ? `WebGL context repeatedly lost for preset "${definition.id}"; using Canvas fallback.`
+          : `WebGL context lost for preset "${definition.id}"; restarting the renderer.`,
       );
-      startPreset(definition.id, true);
+      startPreset(definition.id, true, useCanvasFallback);
     });
 
     if (!document.hidden) engine.start();
