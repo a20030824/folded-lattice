@@ -25,25 +25,29 @@ test("standalone package metadata locks the runtime preset", async ({ page }) =>
     );
   });
 
-  const engineBeforeUrlChange = await page.evaluate(() => {
-    const debugWindow = window as typeof window & { __engine?: object };
+  await page.evaluate(() => {
+    const debugWindow = window as typeof window & {
+      __engine?: object;
+      __packageEngineBefore?: object;
+    };
+    debugWindow.__packageEngineBefore = debugWindow.__engine;
     window.history.pushState({}, "", "?preset=membrane");
-    return debugWindow.__engine;
   });
 
   await page.waitForTimeout(100);
-  const result = await page.evaluate((engineBefore) => {
+  const result = await page.evaluate(() => {
     const debugWindow = window as typeof window & {
       __engine?: object;
+      __packageEngineBefore?: object;
       __packagedPreset?: string | null;
       __presetId?: string;
     };
     return {
       packagedPreset: debugWindow.__packagedPreset,
       presetId: debugWindow.__presetId,
-      sameEngine: debugWindow.__engine === engineBefore,
+      sameEngine: debugWindow.__engine === debugWindow.__packageEngineBefore,
     };
-  }, engineBeforeUrlChange);
+  });
 
   expect(result).toEqual({
     packagedPreset: "wandering-ink",
