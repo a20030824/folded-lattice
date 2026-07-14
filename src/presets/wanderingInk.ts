@@ -1,4 +1,4 @@
-﻿import type { FoldedLatticeConfig } from "../core/config";
+import type { FoldedLatticeConfig } from "../core/config";
 import type {
   PresetDefinition,
   PresetRendererResult,
@@ -162,7 +162,8 @@ function createPropertyBindings(
   const defaults = {
     nodeCount: config.topology.nodeCount,
     triangleOpacity: config.render.triangleOpacity,
-    edgeRestLengthInfluence: config.memory.edgeRestLengthInfluence,
+    triangleAccumulationRate: config.memory.triangleAccumulationRate,
+    maximumMemory: config.memory.maximumMemory,
   };
 
   return [
@@ -174,8 +175,12 @@ function createPropertyBindings(
       context.scheduleTopologyRebuild();
     }),
     createScaledNumberBinding("memoryStrength", 100, (scale) => {
-      config.memory.edgeRestLengthInfluence =
-        defaults.edgeRestLengthInfluence * scale;
+      config.memory.triangleAccumulationRate =
+        defaults.triangleAccumulationRate * scale;
+      config.memory.maximumMemory = Math.min(
+        1,
+        defaults.maximumMemory * scale,
+      );
       config.memory.enabled = scale > 0;
     }),
     createBooleanBinding("mouseInteraction", (enabled) => {
